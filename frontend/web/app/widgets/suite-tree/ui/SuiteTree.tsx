@@ -55,10 +55,12 @@ function toNodes(
             display: 'flex',
             gap: 8,
             justifyContent: 'space-between',
+            minWidth: 0,
             width: '100%',
           }}
         >
-          <Typography.Text ellipsis>
+          <FolderOutlined aria-hidden />
+          <Typography.Text ellipsis style={{ flex: 1, minWidth: 0 }}>
             {suite.title} {suite.archivedAt && <Tag>Архив</Tag>}
           </Typography.Text>
           <Dropdown
@@ -94,7 +96,6 @@ function toNodes(
           </Dropdown>
         </div>
       ),
-      icon: <FolderOutlined />,
       children: toNodes(suite.children ?? [], disabled, onRename, onArchive, onRestore),
     }));
 }
@@ -255,8 +256,8 @@ export function SuiteTree({
         </Dropdown>
       </Space>
       <Tree
+        className="suite-tree"
         blockNode
-        showIcon
         defaultExpandedKeys={['all']}
         draggable={!disabled && !includeArchived}
         treeData={nodes}

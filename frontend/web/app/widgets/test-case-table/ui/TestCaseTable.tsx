@@ -50,7 +50,7 @@ export function TestCaseTable({
     <div ref={tableRegion}>
       <Table<TestCaseFieldsFragment>
         rowKey="id"
-        size="middle"
+        size="small"
         loading={loading}
         dataSource={[...data]}
         scroll={{ x: 1150 }}
@@ -67,6 +67,7 @@ export function TestCaseTable({
             fixed: 'left',
             render: (value, item) => (
               <Button
+                size="small"
                 type="link"
                 className="mono-id"
                 onClick={(event) => {
@@ -151,6 +152,7 @@ export function TestCaseTable({
                 }}
               >
                 <Button
+                  size="small"
                   type="text"
                   aria-label={`Действия ${item.displayId}`}
                   icon={<MoreOutlined />}

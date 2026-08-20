@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { MockedProvider } from '@apollo/client/testing/react';
 import { graphql, HttpResponse } from 'msw';
 import { expect, fn, userEvent, within } from 'storybook/test';
+import { SuiteTreeDocument } from '@/shared/api/graphql';
 import { SuiteTree } from '@/widgets/suite-tree';
+const longSuiteTitle = 'Очень длинное название suite для проверки компактной вёрстки';
 const handlers = [
   graphql.query('SuiteTree', () =>
     HttpResponse.json({
@@ -64,6 +67,55 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
+export const SingleLineNodes: Story = {
+  render: (args) => (
+    <MockedProvider
+      mocks={[
+        {
+          request: {
+            query: SuiteTreeDocument,
+            variables: { projectId: 'project-1', includeArchived: false },
+          },
+          maxUsageCount: Number.POSITIVE_INFINITY,
+          result: {
+            data: {
+              __typename: 'Query',
+              suiteTree: [
+                {
+                  __typename: 'TestSuite',
+                  id: 'suite-1',
+                  projectId: 'project-1',
+                  parentId: null,
+                  title: longSuiteTitle,
+                  description: null,
+                  position: 0,
+                  createdAt: '2026-08-20T00:00:00Z',
+                  updatedAt: '2026-08-20T00:00:00Z',
+                  archivedAt: null,
+                  children: [],
+                },
+              ],
+            },
+          },
+        },
+      ]}
+    >
+      <div style={{ width: 260 }}>
+        <SuiteTree {...args} />
+      </div>
+    </MockedProvider>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const suiteTitle = await canvas.findByText(longSuiteTitle, undefined, { timeout: 5000 });
+    const suiteNode = suiteTitle.closest('.ant-tree-treenode');
+    const tree = suiteTitle.closest('.ant-tree');
+    expect(suiteNode).not.toBeNull();
+    expect(tree).not.toBeNull();
+    expect(suiteNode!.getBoundingClientRect().height).toBeLessThanOrEqual(32);
+    expect(tree!.scrollWidth).toBeLessThanOrEqual(tree!.clientWidth);
+  },
+};
 export const PermissionRestricted: Story = { args: { disabled: true } };
 export const RenameSuccess: Story = {
   parameters: { msw: [...handlers, updateHandler] },

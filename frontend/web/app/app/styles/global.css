@@ -152,13 +152,23 @@ select {
 }
 .repository-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
 }
+.repository-page {
+  padding: 16px;
+}
+.repository-page .page-header {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.repository-page .page-header h2.ant-typography {
+  font-size: 22px;
+}
 .suite-panel {
-  min-height: 560px;
-  padding: 12px 8px;
+  min-height: 0;
+  padding: 8px 6px;
   resize: horizontal;
   overflow: auto;
   max-width: 420px;
@@ -166,7 +176,11 @@ select {
 .suite-tree-heading {
   display: flex;
   justify-content: space-between;
-  padding: 2px 8px 12px;
+  padding: 0 6px 6px;
+}
+.suite-tree .ant-tree-node-content-wrapper,
+.suite-tree .ant-tree-title {
+  min-width: 0;
 }
 .repository-main {
   min-width: 0;
@@ -175,12 +189,12 @@ select {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px;
-  margin-bottom: 10px;
+  gap: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
 }
 .active-filters {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 .table-surface {
   overflow: hidden;

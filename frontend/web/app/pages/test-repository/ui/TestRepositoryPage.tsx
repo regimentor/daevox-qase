@@ -116,6 +116,7 @@ export function TestRepositoryPage() {
         extra={
           <Space>
             <Button
+              size="small"
               icon={<RocketOutlined />}
               disabled={!selected.length || readOnly}
               onClick={() => setCreateRunOpen(true)}
@@ -123,6 +124,7 @@ export function TestRepositoryPage() {
               Создать run из выбранных ({selected.length})
             </Button>
             <Button
+              size="small"
               type="primary"
               icon={<PlusOutlined />}
               disabled={readOnly}
@@ -147,15 +149,17 @@ export function TestRepositoryPage() {
         <section className="repository-main">
           <div className="repository-toolbar surface">
             <Input
+              size="small"
               allowClear
               prefix={<SearchOutlined />}
               aria-label="Поиск тест-кейсов"
               placeholder="Поиск по ID или названию"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              style={{ width: 280 }}
+              style={{ width: 240 }}
             />
             <Select
+              size="small"
               allowClear
               aria-label="Фильтр по приоритету"
               placeholder="Приоритет"
@@ -164,6 +168,7 @@ export function TestRepositoryPage() {
               options={Object.entries(labels.priority).map(([value, label]) => ({ value, label }))}
             />
             <Select
+              size="small"
               allowClear
               aria-label="Фильтр по серьёзности"
               placeholder="Серьёзность"
@@ -172,6 +177,7 @@ export function TestRepositoryPage() {
               options={Object.entries(labels.severity).map(([value, label]) => ({ value, label }))}
             />
             <Select
+              size="small"
               allowClear
               aria-label="Фильтр по типу"
               placeholder="Тип"
@@ -180,6 +186,7 @@ export function TestRepositoryPage() {
               options={Object.entries(labels.type).map(([value, label]) => ({ value, label }))}
             />
             <Select
+              size="small"
               value={filters.sortField}
               aria-label="Сортировка"
               onChange={(sortField) => update({ sortField })}
@@ -191,6 +198,7 @@ export function TestRepositoryPage() {
               ]}
             />
             <Button
+              size="small"
               aria-label="Направление сортировки"
               onClick={() =>
                 update({
@@ -210,6 +218,7 @@ export function TestRepositoryPage() {
               Архив
             </Checkbox>
             <Button
+              size="small"
               type="text"
               icon={<ReloadOutlined />}
               onClick={() => {
