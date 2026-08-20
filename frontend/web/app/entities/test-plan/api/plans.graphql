@@ -1,0 +1,65 @@
+fragment PlanFields on TestPlan {
+  id
+  projectId
+  title
+  description
+  createdBy
+  createdAt
+  updatedAt
+  testCases {
+    id
+    displayId
+    title
+    suiteId
+    priority
+    severity
+    type
+    automationStatus
+    updatedAt
+  }
+}
+query TestPlans($projectId: UUID!, $page: PageInput) {
+  testPlans(projectId: $projectId, page: $page) {
+    items {
+      ...PlanFields
+    }
+    pageInfo {
+      limit
+      offset
+      total
+    }
+  }
+}
+query TestPlan($id: UUID!) {
+  testPlan(id: $id) {
+    ...PlanFields
+  }
+}
+mutation CreateTestPlan(
+  $projectId: UUID!
+  $title: String!
+  $description: String
+  $testCaseIds: [UUID!]!
+) {
+  createTestPlan(
+    projectId: $projectId
+    title: $title
+    description: $description
+    testCaseIds: $testCaseIds
+  ) {
+    ...PlanFields
+  }
+}
+mutation UpdateTestPlan($id: UUID!, $input: UpdateTestPlanInput!) {
+  updateTestPlan(id: $id, input: $input) {
+    ...PlanFields
+  }
+}
+mutation ReplaceTestPlanCases($testPlanId: UUID!, $testCaseIds: [UUID!]!) {
+  replaceTestPlanCases(testPlanId: $testPlanId, testCaseIds: $testCaseIds) {
+    ...PlanFields
+  }
+}
+mutation DeleteTestPlan($id: UUID!) {
+  deleteTestPlan(id: $id)
+}

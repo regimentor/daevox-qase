@@ -1,0 +1,471 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/client"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [citext]
+}
+
+enum WorkspaceRole {
+  ADMIN
+  MEMBER
+}
+
+enum TestCasePriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TestCaseSeverity {
+  BLOCKER
+  CRITICAL
+  MAJOR
+  NORMAL
+  MINOR
+  TRIVIAL
+}
+
+enum TestCaseType {
+  FUNCTIONAL
+  SMOKE
+  REGRESSION
+  SECURITY
+  PERFORMANCE
+  USABILITY
+  COMPATIBILITY
+  OTHER
+}
+
+enum AutomationStatus {
+  MANUAL
+  TO_AUTOMATE
+  AUTOMATED
+  CANNOT_AUTOMATE
+}
+
+enum TestRunStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TestResultStatus {
+  PASSED
+  FAILED
+  BLOCKED
+  SKIPPED
+}
+
+enum AttachmentStatus {
+  PENDING
+  READY
+}
+
+model User {
+  id              String           @id @default(uuid()) @db.Uuid
+  email           String           @unique @db.Citext
+  name            String           @db.VarChar(200)
+  passwordHash    String           @map("password_hash")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  refreshSessions RefreshSession[]
+  memberships     WorkspaceMember[]
+  workspaces      Workspace[]      @relation("WorkspaceCreator")
+  casesCreated    TestCase[]       @relation("CaseCreator")
+  casesAssigned   TestCase[]       @relation("CaseAssignee")
+  plansCreated    TestPlan[]       @relation("PlanCreator")
+  runsCreated     TestRun[]        @relation("RunCreator")
+  runCases        TestRunCase[]    @relation("RunCaseAssignee")
+  results         TestResult[]     @relation("ResultExecutor")
+  attachments     Attachment[]     @relation("AttachmentUploader")
+
+  @@map("users")
+}
+
+model RefreshSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_sessions")
+}
+
+model Workspace {
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String            @db.VarChar(200)
+  createdBy   String            @map("created_by") @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  creator     User              @relation("WorkspaceCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  members     WorkspaceMember[]
+  projects    Project[]
+  attachments Attachment[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model Project {
+  id             String        @id @default(uuid()) @db.Uuid
+  workspaceId    String        @map("workspace_id") @db.Uuid
+  name           String        @db.VarChar(200)
+  code           String        @db.VarChar(32)
+  description    String?
+  nextCaseNumber Int           @default(1) @map("next_case_number")
+  archivedAt     DateTime?     @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  suites         TestSuite[]
+  cases          TestCase[]
+  tags           Tag[]
+  caseTags       TestCaseTag[]
+  plans          TestPlan[]
+  planCases      TestPlanCase[]
+  environments   Environment[]
+  runs           TestRun[]
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId])
+  @@map("projects")
+}
+
+model TestSuite {
+  id          String       @id @default(uuid()) @db.Uuid
+  projectId   String       @map("project_id") @db.Uuid
+  parentId    String?      @map("parent_id") @db.Uuid
+  title       String       @db.VarChar(500)
+  description String?
+  position    Int
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent      TestSuite?   @relation("SuiteTree", fields: [parentId, projectId], references: [id, projectId], onDelete: Restrict)
+  children    TestSuite[]  @relation("SuiteTree")
+  cases       TestCase[]
+
+  @@unique([id, projectId])
+  @@unique([projectId, parentId, position])
+  @@index([projectId])
+  @@index([parentId])
+  @@map("test_suites")
+}
+
+model TestCase {
+  id                       String             @id @default(uuid()) @db.Uuid
+  projectId                String             @map("project_id") @db.Uuid
+  suiteId                  String             @map("suite_id") @db.Uuid
+  caseNumber               Int                @map("case_number")
+  title                    String             @db.VarChar(500)
+  description              String?
+  preconditions            String?
+  postconditions           String?
+  priority                 TestCasePriority
+  severity                 TestCaseSeverity
+  type                     TestCaseType
+  automationStatus         AutomationStatus   @map("automation_status")
+  assigneeId               String?            @map("assignee_id") @db.Uuid
+  estimatedDurationSeconds Int?               @map("estimated_duration_seconds")
+  createdBy                String             @map("created_by") @db.Uuid
+  archivedAt               DateTime?          @map("archived_at") @db.Timestamptz(3)
+  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project                  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  suite                    TestSuite          @relation(fields: [suiteId, projectId], references: [id, projectId], onDelete: Restrict)
+  assignee                 User?              @relation("CaseAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creator                  User               @relation("CaseCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  steps                    TestStep[]
+  tags                     TestCaseTag[]
+  planCases                TestPlanCase[]
+  runCases                 TestRunCase[]
+
+  @@unique([id, projectId])
+  @@unique([projectId, caseNumber])
+  @@index([projectId])
+  @@index([suiteId])
+  @@index([assigneeId])
+  @@map("test_cases")
+}
+
+model TestStep {
+  id             String                @id @default(uuid()) @db.Uuid
+  testCaseId     String                @map("test_case_id") @db.Uuid
+  projectId      String                @map("project_id") @db.Uuid
+  position       Int
+  action         String
+  testData       String?               @map("test_data")
+  expectedResult String                @map("expected_result")
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  testCase       TestCase              @relation(fields: [testCaseId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@unique([id, testCaseId])
+  @@unique([testCaseId, position])
+  @@index([testCaseId])
+  @@map("test_steps")
+}
+
+model Tag {
+  id        String        @id @default(uuid()) @db.Uuid
+  projectId String        @map("project_id") @db.Uuid
+  name      String        @db.Citext
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cases     TestCaseTag[]
+
+  @@unique([id, projectId])
+  @@unique([projectId, name])
+  @@map("tags")
+}
+
+model TestCaseTag {
+  id         String   @id @default(uuid()) @db.Uuid
+  projectId  String   @map("project_id") @db.Uuid
+  testCaseId String   @map("test_case_id") @db.Uuid
+  tagId      String   @map("tag_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testCase   TestCase @relation(fields: [testCaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@unique([testCaseId, tagId])
+  @@map("test_case_tags")
+}
+
+model TestPlan {
+  id          String         @id @default(uuid()) @db.Uuid
+  projectId   String         @map("project_id") @db.Uuid
+  title       String         @db.VarChar(500)
+  description String?
+  createdBy   String         @map("created_by") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator     User           @relation("PlanCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  cases       TestPlanCase[]
+  runs        TestRun[]
+
+  @@unique([id, projectId])
+  @@map("test_plans")
+}
+
+model TestPlanCase {
+  id         String   @id @default(uuid()) @db.Uuid
+  projectId  String   @map("project_id") @db.Uuid
+  testPlanId String   @map("test_plan_id") @db.Uuid
+  testCaseId String   @map("test_case_id") @db.Uuid
+  position   Int
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testPlan   TestPlan @relation(fields: [testPlanId, projectId], references: [id, projectId], onDelete: Cascade)
+  testCase   TestCase @relation(fields: [testCaseId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@unique([testPlanId, testCaseId])
+  @@unique([testPlanId, position])
+  @@index([testPlanId])
+  @@index([testCaseId])
+  @@map("test_plan_cases")
+}
+
+model Environment {
+  id          String    @id @default(uuid()) @db.Uuid
+  projectId   String    @map("project_id") @db.Uuid
+  name        String    @db.VarChar(200)
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs        TestRun[]
+
+  @@unique([id, projectId])
+  @@unique([projectId, name])
+  @@map("environments")
+}
+
+model TestRun {
+  id            String          @id @default(uuid()) @db.Uuid
+  projectId     String          @map("project_id") @db.Uuid
+  testPlanId    String?         @map("test_plan_id") @db.Uuid
+  environmentId String?         @map("environment_id") @db.Uuid
+  title         String          @db.VarChar(500)
+  status        TestRunStatus   @default(DRAFT)
+  createdBy     String          @map("created_by") @db.Uuid
+  startedAt     DateTime?       @map("started_at") @db.Timestamptz(3)
+  completedAt   DateTime?       @map("completed_at") @db.Timestamptz(3)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testPlan      TestPlan?       @relation(fields: [testPlanId, projectId], references: [id, projectId], onDelete: Cascade)
+  environment   Environment?    @relation(fields: [environmentId, projectId], references: [id, projectId], onDelete: Cascade)
+  creator       User            @relation("RunCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  cases         TestRunCase[]
+
+  @@unique([id, projectId])
+  @@index([projectId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("test_runs")
+}
+
+model TestRunCase {
+  id                       String             @id @default(uuid()) @db.Uuid
+  testRunId                String             @map("test_run_id") @db.Uuid
+  projectId                String             @map("project_id") @db.Uuid
+  sourceTestCaseId         String             @map("source_test_case_id") @db.Uuid
+  assigneeId               String?            @map("assignee_id") @db.Uuid
+  caseNumber               Int                @map("case_number")
+  title                    String             @db.VarChar(500)
+  description              String?
+  preconditions            String?
+  postconditions           String?
+  priority                 TestCasePriority
+  severity                 TestCaseSeverity
+  type                     TestCaseType
+  automationStatus         AutomationStatus   @map("automation_status")
+  estimatedDurationSeconds Int?               @map("estimated_duration_seconds")
+  position                 Int
+  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  testRun                  TestRun            @relation(fields: [testRunId, projectId], references: [id, projectId], onDelete: Cascade)
+  sourceTestCase           TestCase           @relation(fields: [sourceTestCaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  assignee                 User?              @relation("RunCaseAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  steps                    TestRunCaseStep[]
+  results                  TestResult[]
+  stepResults              TestStepResult[]
+
+  @@unique([id, testRunId])
+  @@unique([testRunId, position])
+  @@index([testRunId])
+  @@index([assigneeId])
+  @@map("test_run_cases")
+}
+
+model TestRunCaseStep {
+  id               String           @id @default(uuid()) @db.Uuid
+  testRunCaseId    String           @map("test_run_case_id") @db.Uuid
+  sourceTestStepId String?          @map("source_test_step_id") @db.Uuid
+  position         Int
+  action           String
+  testData         String?          @map("test_data")
+  expectedResult   String           @map("expected_result")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  testRunCase      TestRunCase      @relation(fields: [testRunCaseId], references: [id], onDelete: Cascade)
+  results          TestStepResult[]
+
+  @@unique([id, testRunCaseId])
+  @@unique([testRunCaseId, position])
+  @@map("test_run_case_steps")
+}
+
+model TestResult {
+  id            String                 @id @default(uuid()) @db.Uuid
+  testRunCaseId String                 @map("test_run_case_id") @db.Uuid
+  status        TestResultStatus
+  executedBy    String                 @map("executed_by") @db.Uuid
+  comment       String?
+  durationSeconds Int?              @map("duration_seconds")
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  testRunCase   TestRunCase            @relation(fields: [testRunCaseId], references: [id], onDelete: Cascade)
+  executor      User                   @relation("ResultExecutor", fields: [executedBy], references: [id], onDelete: Restrict)
+  stepResults   TestStepResult[]
+  attachments   TestResultAttachment[]
+
+  @@unique([id, testRunCaseId])
+  @@index([testRunCaseId])
+  @@index([createdAt])
+  @@map("test_results")
+}
+
+model TestStepResult {
+  id                String           @id @default(uuid()) @db.Uuid
+  testResultId      String           @map("test_result_id") @db.Uuid
+  testRunCaseId     String           @map("test_run_case_id") @db.Uuid
+  testRunCaseStepId String           @map("test_run_case_step_id") @db.Uuid
+  status            TestResultStatus
+  actualResult      String?          @map("actual_result")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  testResult        TestResult       @relation(fields: [testResultId, testRunCaseId], references: [id, testRunCaseId], onDelete: Cascade)
+  testRunCase       TestRunCase      @relation(fields: [testRunCaseId], references: [id], onDelete: Cascade)
+  testRunCaseStep   TestRunCaseStep  @relation(fields: [testRunCaseStepId, testRunCaseId], references: [id, testRunCaseId], onDelete: Cascade)
+
+  @@unique([testResultId, testRunCaseStepId])
+  @@map("test_step_results")
+}
+
+model Attachment {
+  id          String                 @id @default(uuid()) @db.Uuid
+  workspaceId String                 @map("workspace_id") @db.Uuid
+  uploadedBy  String                 @map("uploaded_by") @db.Uuid
+  storageKey  String                 @unique @map("storage_key")
+  filename    String                 @db.VarChar(500)
+  mimeType    String                 @map("mime_type") @db.VarChar(255)
+  size        BigInt
+  status      AttachmentStatus       @default(PENDING)
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  workspace   Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploader    User                   @relation("AttachmentUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  results     TestResultAttachment[]
+
+  @@index([workspaceId])
+  @@index([status, createdAt])
+  @@map("attachments")
+}
+
+model TestResultAttachment {
+  id           String     @id @default(uuid()) @db.Uuid
+  testResultId String     @map("test_result_id") @db.Uuid
+  attachmentId String     @map("attachment_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  testResult   TestResult @relation(fields: [testResultId], references: [id], onDelete: Cascade)
+  attachment   Attachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@unique([testResultId, attachmentId])
+  @@map("test_result_attachments")
+}
+
+model ObjectDeletion {
+  id           String    @id @default(uuid()) @db.Uuid
+  attachmentId String    @map("attachment_id") @db.Uuid
+  storageKey   String    @map("storage_key")
+  attempts     Int       @default(0)
+  lastError    String?   @map("last_error")
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([nextAttemptAt])
+  @@map("object_deletions")
+}

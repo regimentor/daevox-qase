@@ -1,0 +1,33 @@
+fragment EnvironmentFields on Environment {
+  id
+  projectId
+  name
+  description
+  createdAt
+  updatedAt
+}
+query Environments($projectId: UUID!, $page: PageInput) {
+  environments(projectId: $projectId, page: $page) {
+    items {
+      ...EnvironmentFields
+    }
+    pageInfo {
+      limit
+      offset
+      total
+    }
+  }
+}
+mutation CreateEnvironment($projectId: UUID!, $name: String!, $description: String) {
+  createEnvironment(projectId: $projectId, name: $name, description: $description) {
+    ...EnvironmentFields
+  }
+}
+mutation UpdateEnvironment($id: UUID!, $input: UpdateEnvironmentInput!) {
+  updateEnvironment(id: $id, input: $input) {
+    ...EnvironmentFields
+  }
+}
+mutation DeleteEnvironment($id: UUID!) {
+  deleteEnvironment(id: $id)
+}

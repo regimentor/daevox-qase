@@ -1,0 +1,69 @@
+fragment WorkspaceFields on Workspace {
+  id
+  name
+  createdBy
+  createdAt
+  updatedAt
+}
+fragment WorkspaceMemberFields on WorkspaceMember {
+  id
+  workspaceId
+  userId
+  role
+  createdAt
+  updatedAt
+  user {
+    id
+    email
+    name
+    createdAt
+    updatedAt
+  }
+}
+query Workspaces($page: PageInput) {
+  workspaces(page: $page) {
+    items {
+      ...WorkspaceFields
+    }
+    pageInfo {
+      limit
+      offset
+      total
+    }
+  }
+}
+query WorkspaceContext($id: UUID!) {
+  workspace(id: $id) {
+    ...WorkspaceFields
+  }
+}
+query WorkspaceMembers($workspaceId: UUID!, $page: PageInput) {
+  workspaceMembers(workspaceId: $workspaceId, page: $page) {
+    items {
+      ...WorkspaceMemberFields
+    }
+    pageInfo {
+      limit
+      offset
+      total
+    }
+  }
+}
+mutation CreateWorkspace($name: String!) {
+  createWorkspace(name: $name) {
+    ...WorkspaceFields
+  }
+}
+mutation AddWorkspaceMember($workspaceId: UUID!, $email: String!, $role: WorkspaceRole!) {
+  addWorkspaceMember(workspaceId: $workspaceId, email: $email, role: $role) {
+    ...WorkspaceMemberFields
+  }
+}
+mutation UpdateWorkspaceMember($workspaceId: UUID!, $userId: UUID!, $role: WorkspaceRole!) {
+  updateWorkspaceMember(workspaceId: $workspaceId, userId: $userId, role: $role) {
+    ...WorkspaceMemberFields
+  }
+}
+mutation RemoveWorkspaceMember($workspaceId: UUID!, $userId: UUID!) {
+  removeWorkspaceMember(workspaceId: $workspaceId, userId: $userId)
+}

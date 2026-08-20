@@ -1,0 +1,13 @@
+{
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "ignorePatterns": [
+    "backend/storage/src/generated/**",
+    "backend/api/src/generated/**",
+    "frontend/web/app/shared/api/graphql/generated.ts",
+    "frontend/web/.react-router/**",
+    "frontend/web/storybook-static/**",
+    "package-lock.json"
+  ]
+}

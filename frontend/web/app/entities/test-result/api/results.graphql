@@ -1,0 +1,83 @@
+fragment AttachmentFields on Attachment {
+  id
+  workspaceId
+  uploadedBy
+  filename
+  mimeType
+  size
+  status
+  downloadUrl
+  createdAt
+  updatedAt
+}
+fragment ResultFields on TestResult {
+  id
+  testRunCaseId
+  status
+  executedBy
+  comment
+  durationSeconds
+  createdAt
+  updatedAt
+  stepResults {
+    id
+    testResultId
+    testRunCaseStepId
+    status
+    actualResult
+    createdAt
+    updatedAt
+  }
+  attachments {
+    ...AttachmentFields
+  }
+}
+query TestResults($runCaseId: UUID!, $page: PageInput) {
+  testResults(runCaseId: $runCaseId, page: $page) {
+    items {
+      ...ResultFields
+    }
+    pageInfo {
+      limit
+      offset
+      total
+    }
+  }
+}
+mutation CreateTestResult($input: CreateTestResultInput!) {
+  createTestResult(input: $input) {
+    ...ResultFields
+  }
+}
+mutation PresignAttachmentUpload(
+  $workspaceId: UUID!
+  $filename: String!
+  $mimeType: String!
+  $size: BigInt!
+) {
+  presignAttachmentUpload(
+    workspaceId: $workspaceId
+    filename: $filename
+    mimeType: $mimeType
+    size: $size
+  ) {
+    attachment {
+      ...AttachmentFields
+    }
+    url
+    method
+    headers {
+      name
+      value
+    }
+    expiresAt
+  }
+}
+mutation CompleteAttachmentUpload($id: UUID!) {
+  completeAttachmentUpload(id: $id) {
+    ...AttachmentFields
+  }
+}
+mutation DeleteAttachment($id: UUID!) {
+  deleteAttachment(id: $id)
+}

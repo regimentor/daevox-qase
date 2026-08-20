@@ -1,0 +1,76 @@
+{
+  "name": "daevox-qa-suite",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "backend/*",
+    "frontend/*"
+  ],
+  "scripts": {
+    "build": "npm run db:generate && npm run build -w @app/storage && npm run build -w @app/api",
+    "dev": "npm run dev -w @app/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:web": "npm run dev -w @app/web",
+    "build:web": "npm run build -w @app/web",
+    "typecheck:web": "npm run typecheck -w @app/web",
+    "codegen": "npm run codegen -w @app/web",
+    "codegen:check": "npm run codegen:check -w @app/web",
+    "storybook": "npm run storybook -w @app/web",
+    "build-storybook": "npm run build-storybook -w @app/web",
+    "test:web": "npm run test -w @app/web",
+    "test:web:coverage": "npm run test:coverage -w @app/web",
+    "test:web:e2e": "npm run test:e2e -w @app/web",
+    "lint": "oxlint --deny-warnings backend frontend && npm run lint:boundaries -w @app/web",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "test": "vitest run --exclude '**/dist/**' --exclude '**/*.e2e-spec.ts' --exclude '**/*.integration-spec.ts'",
+    "test:coverage": "vitest run --config vitest.coverage.config.mts --coverage",
+    "test:e2e": "vitest run --config backend/api/vitest.e2e.config.ts",
+    "db:generate": "npm run db:generate -w @app/storage",
+    "db:migrate": "npm run db:migrate -w @app/storage",
+    "db:migrate:deploy": "npm run db:migrate:deploy -w @app/storage",
+    "db:seed": "npm run db:seed -w @app/storage",
+    "db:studio": "npm run db:studio -w @app/storage",
+    "attachments:cleanup": "npm run attachments:cleanup -w @app/api"
+  },
+  "dependencies": {
+    "@apollo/server": "5.5.1",
+    "@as-integrations/express5": "1.1.2",
+    "express": "5.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@storybook/addon-a11y": "10.5.9",
+    "@storybook/addon-vitest": "10.5.9",
+    "@storybook/react-vite": "10.5.9",
+    "@testcontainers/minio": "12.1.0",
+    "@testcontainers/postgresql": "12.1.0",
+    "@types/express": "5.0.3",
+    "@types/node": "^26.0.0",
+    "@types/supertest": "^7.2.0",
+    "@vitest/browser-playwright": "4.1.11",
+    "@vitest/coverage-v8": "4.1.11",
+    "istanbul-lib-instrument": "6.0.3",
+    "oxfmt": "0.64.0",
+    "oxlint": "1.79.0",
+    "storybook": "10.5.9",
+    "supertest": "7.2.2",
+    "testcontainers": "12.1.0",
+    "ts-morph": "27.0.2",
+    "tsx": "4.20.6",
+    "typescript": "7.0.2",
+    "vite": "8.2.1",
+    "vitest": "4.1.11"
+  },
+  "overrides": {
+    "@apollo/server-plugin-landing-page-graphql-playground": {
+      "@apollo/server": "5.5.1"
+    },
+    "@nestjs/apollo": {
+      "@apollo/server": "5.5.1"
+    }
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

@@ -1,0 +1,93 @@
+# Public operations are documented in schema.graphql; these examples are safe starting points.
+
+mutation Register {
+  register(email: "qa@example.com", name: "QA Engineer", password: "replace-with-a-long-password") {
+    accessToken
+    refreshToken
+    user {
+      id
+      email
+      name
+    }
+  }
+}
+
+mutation CreateCase($projectId: UUID!, $suiteId: UUID!, $tagIds: [UUID!]) {
+  createTestCase(
+    input: {
+      projectId: $projectId
+      suiteId: $suiteId
+      title: "Login succeeds"
+      priority: HIGH
+      severity: CRITICAL
+      type: SMOKE
+      automationStatus: MANUAL
+      tagIds: $tagIds
+      steps: [{ action: "Submit valid credentials", expectedResult: "Dashboard opens" }]
+    }
+  ) {
+    id
+    displayId
+    steps {
+      id
+      position
+      action
+      expectedResult
+    }
+    tags {
+      id
+      name
+    }
+  }
+}
+
+mutation CreateRun($projectId: UUID!, $planId: UUID!, $environmentId: UUID) {
+  createTestRun(
+    input: {
+      projectId: $projectId
+      title: "Staging Smoke"
+      testPlanId: $planId
+      environmentId: $environmentId
+    }
+  ) {
+    id
+    status
+    cases {
+      id
+      displayId
+      title
+      currentStatus
+      steps {
+        id
+        action
+        expectedResult
+      }
+    }
+  }
+}
+
+query RunStatus($runId: UUID!, $projectId: UUID!) {
+  runSummary(runId: $runId) {
+    total
+    untested
+    passed
+    failed
+    blocked
+    skipped
+    executed
+    progressPercent
+    passRate
+  }
+  projectDashboard(projectId: $projectId) {
+    totalTestCases
+    manualTestCases
+    automatedTestCases
+    runsLast30Days
+    averagePassRate
+    latestRuns {
+      id
+      title
+      status
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "plugins": ["typescript", "unicorn", "promise"],
+  "categories": { "correctness": "error", "suspicious": "warn" },
+  "rules": {
+    "typescript/no-extraneous-class": "off",
+    "promise/always-return": "off",
+    "promise/no-promise-in-callback": "off",
+    "unicorn/prefer-add-event-listener": "off",
+    "eslint/no-shadow": "off",
+    "eslint/no-underscore-dangle": "off"
+  },
+  "ignorePatterns": ["**/dist/**", "**/src/generated/**", "**/node_modules/**"]
+}

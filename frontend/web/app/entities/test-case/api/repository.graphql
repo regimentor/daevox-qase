@@ -1,0 +1,146 @@
+fragment TestStepFields on TestStep {
+  id
+  testCaseId
+  position
+  action
+  testData
+  expectedResult
+  createdAt
+  updatedAt
+}
+fragment TagFields on Tag {
+  id
+  projectId
+  name
+  createdAt
+  updatedAt
+}
+fragment TestCaseFields on TestCase {
+  id
+  projectId
+  suiteId
+  caseNumber
+  displayId
+  title
+  description
+  preconditions
+  postconditions
+  priority
+  severity
+  type
+  automationStatus
+  assigneeId
+  estimatedDurationSeconds
+  createdBy
+  archivedAt
+  steps {
+    ...TestStepFields
+  }
+  tags {
+    ...TagFields
+  }
+  createdAt
+  updatedAt
+}
+fragment SuiteFields on TestSuite {
+  id
+  projectId
+  parentId
+  title
+  description
+  position
+  createdAt
+  updatedAt
+  children {
+    id
+    projectId
+    parentId
+    title
+    description
+    position
+    createdAt
+    updatedAt
+    children {
+      id
+      projectId
+      parentId
+      title
+      description
+      position
+      createdAt
+      updatedAt
+    }
+  }
+}
+query SuiteTree($projectId: UUID!) {
+  suiteTree(projectId: $projectId) {
+    ...SuiteFields
+  }
+}
+query TestCases($projectId: UUID!, $filter: TestCaseFilter, $sort: TestCaseSort, $page: PageInput) {
+  testCases(projectId: $projectId, filter: $filter, sort: $sort, page: $page) {
+    items {
+      ...TestCaseFields
+    }
+    pageInfo {
+      limit
+      offset
+      total
+    }
+  }
+}
+query TestCase($id: UUID!) {
+  testCase(id: $id) {
+    ...TestCaseFields
+  }
+}
+query Tags($projectId: UUID!) {
+  tags(projectId: $projectId) {
+    ...TagFields
+  }
+}
+mutation CreateSuite($projectId: UUID!, $title: String!, $parentId: UUID, $position: Int) {
+  createTestSuite(projectId: $projectId, title: $title, parentId: $parentId, position: $position) {
+    id
+    title
+    parentId
+    position
+  }
+}
+mutation MoveSuite($suiteId: UUID!, $position: Int!, $parentId: UUID) {
+  moveTestSuite(suiteId: $suiteId, position: $position, parentId: $parentId) {
+    id
+    parentId
+    position
+  }
+}
+mutation CreateTestCase($input: CreateTestCaseInput!) {
+  createTestCase(input: $input) {
+    ...TestCaseFields
+  }
+}
+mutation UpdateTestCase($id: UUID!, $input: UpdateTestCaseInput!) {
+  updateTestCase(id: $id, input: $input) {
+    ...TestCaseFields
+  }
+}
+mutation ReplaceTestCaseSteps($testCaseId: UUID!, $steps: [TestStepInput!]!) {
+  replaceTestCaseSteps(testCaseId: $testCaseId, steps: $steps) {
+    ...TestCaseFields
+  }
+}
+mutation ReplaceTestCaseTags($testCaseId: UUID!, $tagIds: [UUID!]!) {
+  replaceTestCaseTags(testCaseId: $testCaseId, tagIds: $tagIds) {
+    ...TestCaseFields
+  }
+}
+mutation ArchiveTestCase($id: UUID!) {
+  archiveTestCase(id: $id) {
+    ...TestCaseFields
+  }
+}
+mutation CreateTag($projectId: UUID!, $name: String!) {
+  createTag(projectId: $projectId, name: $name) {
+    ...TagFields
+  }
+}

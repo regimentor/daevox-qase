@@ -1,0 +1,16 @@
+.git
+.scratch
+.agents
+.codex
+node_modules
+dist
+coverage
+frontend/web/build
+frontend/web/.react-router
+frontend/web/storybook-static
+frontend/web/playwright-report
+frontend/web/test-results
+.env
+*.log
+access-private.pem
+access-public.pem

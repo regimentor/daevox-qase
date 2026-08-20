@@ -1,0 +1,59 @@
+fragment ProjectFields on Project {
+  id
+  workspaceId
+  name
+  code
+  description
+  archivedAt
+  createdAt
+  updatedAt
+}
+query Projects($workspaceId: UUID!, $page: PageInput) {
+  projects(workspaceId: $workspaceId, page: $page) {
+    items {
+      ...ProjectFields
+    }
+    pageInfo {
+      limit
+      offset
+      total
+    }
+  }
+}
+query ProjectContext($id: UUID!) {
+  project(id: $id) {
+    ...ProjectFields
+  }
+}
+query ProjectDashboard($projectId: UUID!) {
+  projectDashboard(projectId: $projectId) {
+    totalTestCases
+    manualTestCases
+    automatedTestCases
+    runsLast30Days
+    averagePassRate
+    latestRuns {
+      id
+      title
+      status
+      environmentId
+      createdAt
+      startedAt
+      completedAt
+      cases {
+        id
+        currentStatus
+      }
+    }
+  }
+}
+mutation CreateProject($workspaceId: UUID!, $name: String!, $code: String!, $description: String) {
+  createProject(workspaceId: $workspaceId, name: $name, code: $code, description: $description) {
+    ...ProjectFields
+  }
+}
+mutation ArchiveProject($id: UUID!) {
+  archiveProject(id: $id) {
+    ...ProjectFields
+  }
+}

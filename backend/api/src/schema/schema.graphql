@@ -1,0 +1,651 @@
+"RFC 4122 universally unique identifier."
+scalar UUID
+
+"UTC timestamp serialized as ISO 8601."
+scalar DateTime
+
+"Arbitrary-size integer serialized as a decimal string."
+scalar BigInt
+
+"Workspace membership role. ADMIN alone can manage the workspace and members."
+enum WorkspaceRole {
+  ADMIN
+  MEMBER
+}
+"Business priority of a test case."
+enum TestCasePriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+"Impact severity of a test case."
+enum TestCaseSeverity {
+  BLOCKER
+  CRITICAL
+  MAJOR
+  NORMAL
+  MINOR
+  TRIVIAL
+}
+"Functional classification of a test case."
+enum TestCaseType {
+  FUNCTIONAL
+  SMOKE
+  REGRESSION
+  SECURITY
+  PERFORMANCE
+  USABILITY
+  COMPATIBILITY
+  OTHER
+}
+"Automation lifecycle of a test case."
+enum AutomationStatus {
+  MANUAL
+  TO_AUTOMATE
+  AUTOMATED
+  CANNOT_AUTOMATE
+}
+"Allowed state of a test run."
+enum TestRunStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+}
+"Explicit outcome of an execution attempt or step."
+enum TestResultStatus {
+  PASSED
+  FAILED
+  BLOCKED
+  SKIPPED
+}
+"Current derived status of a run case."
+enum CurrentRunCaseStatus {
+  UNTESTED
+  PASSED
+  FAILED
+  BLOCKED
+  SKIPPED
+}
+"Lifecycle of attachment metadata."
+enum AttachmentStatus {
+  PENDING
+  READY
+}
+"Sortable test-case field. Every order uses id as a final tie-breaker."
+enum TestCaseSortField {
+  CASE_NUMBER
+  TITLE
+  PRIORITY
+  SEVERITY
+  CREATED_AT
+  UPDATED_AT
+}
+"Sort direction."
+enum SortDirection {
+  ASC
+  DESC
+}
+
+"Shared bounded offset pagination. Limit must be 1–100 and offset non-negative."
+input PageInput {
+  limit: Int = 50
+  offset: Int = 0
+}
+"Metadata for an offset-paginated result."
+type PageInfo {
+  limit: Int!
+  offset: Int!
+  total: Int!
+}
+
+"A registered account. Password material is never exposed."
+type User {
+  id: UUID!
+  email: String!
+  name: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Tokens created by register, login, or refresh. Refresh tokens are single-use and rotate."
+type AuthPayload {
+  accessToken: String!
+  refreshToken: String!
+  accessTokenExpiresAt: DateTime!
+  refreshTokenExpiresAt: DateTime!
+  user: User!
+}
+
+"A tenant boundary visible only to its members."
+type Workspace {
+  id: UUID!
+  name: String!
+  createdBy: UUID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"A user's role within a workspace."
+type WorkspaceMember {
+  id: UUID!
+  workspaceId: UUID!
+  userId: UUID!
+  role: WorkspaceRole!
+  user: User!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Paginated workspaces."
+type WorkspaceConnection {
+  items: [Workspace!]!
+  pageInfo: PageInfo!
+}
+"Paginated workspace members."
+type WorkspaceMemberConnection {
+  items: [WorkspaceMember!]!
+  pageInfo: PageInfo!
+}
+
+"A QA project within one workspace. Archived projects are read-only."
+type Project {
+  id: UUID!
+  workspaceId: UUID!
+  name: String!
+  code: String!
+  description: String
+  archivedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Paginated projects."
+type ProjectConnection {
+  items: [Project!]!
+  pageInfo: PageInfo!
+}
+"Fields editable on a project. Omitted means unchanged; explicit null clears nullable fields."
+input UpdateProjectInput {
+  name: String
+  code: String
+  description: String
+}
+
+"A node in a project-scoped ordered suite tree."
+type TestSuite {
+  id: UUID!
+  projectId: UUID!
+  parentId: UUID
+  title: String!
+  description: String
+  position: Int!
+  children: [TestSuite!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Fields editable without moving a suite."
+input UpdateTestSuiteInput {
+  title: String
+  description: String
+}
+
+"An ordered editable source test step."
+type TestStep {
+  id: UUID!
+  testCaseId: UUID!
+  position: Int!
+  action: String!
+  testData: String
+  expectedResult: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"A step supplied during create or atomic replacement; list order becomes position."
+input TestStepInput {
+  action: String!
+  testData: String
+  expectedResult: String!
+}
+"A project-local case label whose name is case-insensitive."
+type Tag {
+  id: UUID!
+  projectId: UUID!
+  name: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"A source test case. Display id is computed and never persisted."
+type TestCase {
+  id: UUID!
+  projectId: UUID!
+  suiteId: UUID!
+  caseNumber: Int!
+  displayId: String!
+  title: String!
+  description: String
+  preconditions: String
+  postconditions: String
+  priority: TestCasePriority!
+  severity: TestCaseSeverity!
+  type: TestCaseType!
+  automationStatus: AutomationStatus!
+  assigneeId: UUID
+  estimatedDurationSeconds: Int
+  createdBy: UUID!
+  archivedAt: DateTime
+  steps: [TestStep!]!
+  tags: [Tag!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Atomic test-case creation input. Steps and tags are validated before any write."
+input CreateTestCaseInput {
+  projectId: UUID!
+  suiteId: UUID!
+  title: String!
+  description: String
+  preconditions: String
+  postconditions: String
+  priority: TestCasePriority!
+  severity: TestCaseSeverity!
+  type: TestCaseType!
+  automationStatus: AutomationStatus!
+  assigneeId: UUID
+  estimatedDurationSeconds: Int
+  steps: [TestStepInput!]
+  tagIds: [UUID!]
+}
+"Editable test-case fields. Immutable project, number, and creator are absent."
+input UpdateTestCaseInput {
+  suiteId: UUID
+  title: String
+  description: String
+  preconditions: String
+  postconditions: String
+  priority: TestCasePriority
+  severity: TestCaseSeverity
+  type: TestCaseType
+  automationStatus: AutomationStatus
+  assigneeId: UUID
+  estimatedDurationSeconds: Int
+}
+"Filters for active test cases. includeArchived defaults to false."
+input TestCaseFilter {
+  suiteId: UUID
+  tagId: UUID
+  priority: TestCasePriority
+  severity: TestCaseSeverity
+  type: TestCaseType
+  automationStatus: AutomationStatus
+  assigneeId: UUID
+  search: String
+  includeArchived: Boolean = false
+}
+"Deterministic test-case sort."
+input TestCaseSort {
+  field: TestCaseSortField! = CASE_NUMBER
+  direction: SortDirection! = ASC
+}
+"Paginated test cases."
+type TestCaseConnection {
+  items: [TestCase!]!
+  pageInfo: PageInfo!
+}
+
+"A static, ordered set of active cases."
+type TestPlan {
+  id: UUID!
+  projectId: UUID!
+  title: String!
+  description: String
+  testCases: [TestCase!]!
+  createdBy: UUID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Editable plan metadata."
+input UpdateTestPlanInput {
+  title: String
+  description: String
+}
+"Paginated test plans."
+type TestPlanConnection {
+  items: [TestPlan!]!
+  pageInfo: PageInfo!
+}
+"A named run environment."
+type Environment {
+  id: UUID!
+  projectId: UUID!
+  name: String!
+  description: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Editable environment fields."
+input UpdateEnvironmentInput {
+  name: String
+  description: String
+}
+"Paginated environments."
+type EnvironmentConnection {
+  items: [Environment!]!
+  pageInfo: PageInfo!
+}
+
+"An immutable snapshot of a source step."
+type TestRunCaseStep {
+  id: UUID!
+  testRunCaseId: UUID!
+  sourceTestStepId: UUID
+  position: Int!
+  action: String!
+  testData: String
+  expectedResult: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"An immutable source-case snapshot; only assignment can change."
+type TestRunCase {
+  id: UUID!
+  testRunId: UUID!
+  projectId: UUID!
+  sourceTestCaseId: UUID!
+  assigneeId: UUID
+  caseNumber: Int!
+  displayId: String!
+  title: String!
+  description: String
+  preconditions: String
+  postconditions: String
+  priority: TestCasePriority!
+  severity: TestCaseSeverity!
+  type: TestCaseType!
+  automationStatus: AutomationStatus!
+  estimatedDurationSeconds: Int
+  position: Int!
+  currentStatus: CurrentRunCaseStatus!
+  steps: [TestRunCaseStep!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"A run and its ordered immutable snapshots. Completed runs are read-only."
+type TestRun {
+  id: UUID!
+  projectId: UUID!
+  testPlanId: UUID
+  environmentId: UUID
+  title: String!
+  status: TestRunStatus!
+  createdBy: UUID!
+  startedAt: DateTime
+  completedAt: DateTime
+  cases: [TestRunCase!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Exactly one of testPlanId or a non-empty testCaseIds must be supplied."
+input CreateTestRunInput {
+  projectId: UUID!
+  title: String!
+  testPlanId: UUID
+  testCaseIds: [UUID!]
+  environmentId: UUID
+  defaultAssigneeId: UUID
+}
+"Only draft run metadata can be edited."
+input UpdateTestRunInput {
+  title: String
+  environmentId: UUID
+}
+"Paginated test runs."
+type TestRunConnection {
+  items: [TestRun!]!
+  pageInfo: PageInfo!
+}
+
+"One append-only execution attempt."
+type TestResult {
+  id: UUID!
+  testRunCaseId: UUID!
+  status: TestResultStatus!
+  executedBy: UUID!
+  comment: String
+  durationSeconds: Int
+  stepResults: [TestStepResult!]!
+  attachments: [Attachment!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Outcome captured for one snapshot step in one attempt."
+type TestStepResult {
+  id: UUID!
+  testResultId: UUID!
+  testRunCaseStepId: UUID!
+  status: TestResultStatus!
+  actualResult: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Step outcome supplied with an execution attempt."
+input TestStepResultInput {
+  stepId: UUID!
+  status: TestResultStatus!
+  actualResult: String
+}
+"Atomic result input. Status is explicit and partial step results are allowed."
+input CreateTestResultInput {
+  runCaseId: UUID!
+  status: TestResultStatus!
+  comment: String
+  durationSeconds: Int
+  steps: [TestStepResultInput!]
+  attachmentIds: [UUID!]
+}
+"Paginated attempt history, newest first by timestamp then id."
+type TestResultConnection {
+  items: [TestResult!]!
+  pageInfo: PageInfo!
+}
+
+"Private object metadata. storageKey is deliberately absent."
+type Attachment {
+  id: UUID!
+  workspaceId: UUID!
+  uploadedBy: UUID!
+  filename: String!
+  mimeType: String!
+  size: BigInt!
+  status: AttachmentStatus!
+  downloadUrl: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+"Short-lived direct upload instruction for a private object."
+type PresignedUpload {
+  attachment: Attachment!
+  url: String!
+  method: String!
+  headers: [UploadHeader!]!
+  expiresAt: DateTime!
+}
+"Required header for a presigned request."
+type UploadHeader {
+  name: String!
+  value: String!
+}
+
+"Set-based summary using only each run case's latest result."
+type RunSummary {
+  total: Int!
+  untested: Int!
+  passed: Int!
+  failed: Int!
+  blocked: Int!
+  skipped: Int!
+  executed: Int!
+  progressPercent: Float!
+  passRate: Float!
+}
+"Project overview. Case counts exclude archived cases; latestRuns contains at most five."
+type ProjectDashboard {
+  totalTestCases: Int!
+  manualTestCases: Int!
+  automatedTestCases: Int!
+  latestRuns: [TestRun!]!
+  runsLast30Days: Int!
+  averagePassRate: Float!
+}
+
+"Authenticated reads. Foreign-tenant UUIDs are reported as RESOURCE_NOT_FOUND."
+type Query {
+  "Current account."
+  me: User!
+  "Workspaces where the actor is a member."
+  workspaces(page: PageInput): WorkspaceConnection!
+  "One authorized workspace."
+  workspace(id: UUID!): Workspace!
+  "Members of an authorized workspace."
+  workspaceMembers(workspaceId: UUID!, page: PageInput): WorkspaceMemberConnection!
+  "Projects in an authorized workspace."
+  projects(workspaceId: UUID!, page: PageInput): ProjectConnection!
+  "One authorized project."
+  project(id: UUID!): Project!
+  "One authorized suite."
+  suite(id: UUID!): TestSuite!
+  "Full ordered suite tree loaded without N+1."
+  suiteTree(projectId: UUID!): [TestSuite!]!
+  "One authorized source test case."
+  testCase(id: UUID!): TestCase!
+  "Filtered, searched, sorted and paginated cases."
+  testCases(
+    projectId: UUID!
+    filter: TestCaseFilter
+    sort: TestCaseSort
+    page: PageInput
+  ): TestCaseConnection!
+  "All project tags sorted by name and id."
+  tags(projectId: UUID!): [Tag!]!
+  "One plan and its ordered cases."
+  testPlan(id: UUID!): TestPlan!
+  "Project plans."
+  testPlans(projectId: UUID!, page: PageInput): TestPlanConnection!
+  "Project environments."
+  environments(projectId: UUID!, page: PageInput): EnvironmentConnection!
+  "One run with ordered snapshots."
+  testRun(id: UUID!): TestRun!
+  "Project runs, optionally filtered by status."
+  testRuns(projectId: UUID!, status: TestRunStatus, page: PageInput): TestRunConnection!
+  "One run-case snapshot."
+  runCase(id: UUID!): TestRunCase!
+  "Attempt history for one run case."
+  testResults(runCaseId: UUID!, page: PageInput): TestResultConnection!
+  "Latest-result aggregate for a run."
+  runSummary(runId: UUID!): RunSummary!
+  "Current project metrics."
+  projectDashboard(projectId: UUID!): ProjectDashboard!
+}
+
+"Mutations enforce membership; workspace administration additionally requires ADMIN."
+type Mutation {
+  "Register and create the first rotating refresh session. Auth throttling returns RATE_LIMITED."
+  register(email: String!, name: String!, password: String!): AuthPayload!
+  "Authenticate with a uniform INVALID_CREDENTIALS failure."
+  login(email: String!, password: String!): AuthPayload!
+  "Rotate a single-use refresh token. Reuse revokes its session."
+  refresh(refreshToken: String!): AuthPayload!
+  "Idempotently revoke a refresh token."
+  logout(refreshToken: String!): Boolean!
+  "Create a workspace and initial ADMIN membership atomically."
+  createWorkspace(name: String!): Workspace!
+  "ADMIN-only workspace rename."
+  updateWorkspace(id: UUID!, name: String!): Workspace!
+  "ADMIN-only tenant deletion guarded by the exact current name."
+  deleteWorkspace(workspaceId: UUID!, confirmationName: String!): Boolean!
+  "ADMIN-only addition of an already registered user."
+  addWorkspaceMember(workspaceId: UUID!, email: String!, role: WorkspaceRole!): WorkspaceMember!
+  "ADMIN-only role update preserving at least one admin."
+  updateWorkspaceMember(workspaceId: UUID!, userId: UUID!, role: WorkspaceRole!): WorkspaceMember!
+  "ADMIN-only removal preserving at least one admin."
+  removeWorkspaceMember(workspaceId: UUID!, userId: UUID!): Boolean!
+  "Create a normalized project. Members may write project-domain data."
+  createProject(workspaceId: UUID!, name: String!, code: String!, description: String): Project!
+  "Update project metadata."
+  updateProject(id: UUID!, input: UpdateProjectInput!): Project!
+  "Idempotently archive a project and make its domain read-only."
+  archiveProject(id: UUID!): Project!
+  "Hard-delete a project only before run history exists."
+  deleteProject(id: UUID!): Boolean!
+  "Append or insert a suite among siblings."
+  createTestSuite(
+    projectId: UUID!
+    title: String!
+    parentId: UUID
+    description: String
+    position: Int
+  ): TestSuite!
+  "Update suite metadata."
+  updateTestSuite(id: UUID!, input: UpdateTestSuiteInput!): TestSuite!
+  "Move and reindex source and destination sibling lists atomically."
+  moveTestSuite(suiteId: UUID!, position: Int!, parentId: UUID): TestSuite!
+  "Delete an empty suite only."
+  deleteTestSuite(id: UUID!): Boolean!
+  "Allocate a permanent case number and create case content atomically."
+  createTestCase(input: CreateTestCaseInput!): TestCase!
+  "Update mutable source case fields."
+  updateTestCase(id: UUID!, input: UpdateTestCaseInput!): TestCase!
+  "Idempotently archive a source case."
+  archiveTestCase(id: UUID!): TestCase!
+  "Hard-delete a case never referenced by a plan or run."
+  deleteTestCase(id: UUID!): Boolean!
+  "Replace every source step in one transaction."
+  replaceTestCaseSteps(testCaseId: UUID!, steps: [TestStepInput!]!): TestCase!
+  "Replace all case tags in one transaction."
+  replaceTestCaseTags(testCaseId: UUID!, tagIds: [UUID!]!): TestCase!
+  "Create a case-insensitive project tag."
+  createTag(projectId: UUID!, name: String!): Tag!
+  "Delete a project tag and its case links."
+  deleteTag(id: UUID!): Boolean!
+  "Create a static ordered plan."
+  createTestPlan(
+    projectId: UUID!
+    title: String!
+    testCaseIds: [UUID!]!
+    description: String
+  ): TestPlan!
+  "Update plan metadata."
+  updateTestPlan(id: UUID!, input: UpdateTestPlanInput!): TestPlan!
+  "Atomically replace ordered plan cases."
+  replaceTestPlanCases(testPlanId: UUID!, testCaseIds: [UUID!]!): TestPlan!
+  "Delete a plan never used by a run."
+  deleteTestPlan(id: UUID!): Boolean!
+  "Create a project environment."
+  createEnvironment(projectId: UUID!, name: String!, description: String): Environment!
+  "Update an environment."
+  updateEnvironment(id: UUID!, input: UpdateEnvironmentInput!): Environment!
+  "Delete an environment never used by a run."
+  deleteEnvironment(id: UUID!): Boolean!
+  "Atomically create a run and immutable case/step snapshots."
+  createTestRun(input: CreateTestRunInput!): TestRun!
+  "Update draft run metadata."
+  updateTestRun(id: UUID!, input: UpdateTestRunInput!): TestRun!
+  "Conditionally transition DRAFT to IN_PROGRESS."
+  startTestRun(id: UUID!): TestRun!
+  "Conditionally transition IN_PROGRESS to COMPLETED."
+  completeTestRun(id: UUID!): TestRun!
+  "Delete a draft run only."
+  deleteTestRun(id: UUID!): Boolean!
+  "Change the only mutable run-case snapshot field."
+  updateRunCaseAssignee(runCaseId: UUID!, assigneeId: UUID): TestRunCase!
+  "Assign selected or all cases in a run atomically."
+  assignRunCases(runId: UUID!, assigneeId: UUID, runCaseIds: [UUID!]): TestRun!
+  "Append an execution attempt, step outcomes and attachments atomically."
+  createTestResult(input: CreateTestResultInput!): TestResult!
+  "Create PENDING metadata and a short-lived direct PUT URL."
+  presignAttachmentUpload(
+    workspaceId: UUID!
+    filename: String!
+    mimeType: String!
+    size: BigInt!
+  ): PresignedUpload!
+  "Verify object metadata through HEAD and mark it READY."
+  completeAttachmentUpload(id: UUID!): Attachment!
+  "Delete an unused attachment. Object failures are retained for retry."
+  deleteAttachment(id: UUID!): Boolean!
+}

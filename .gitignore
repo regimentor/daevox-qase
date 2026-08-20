@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+coverage/
+frontend/web/build/
+frontend/web/storybook-static/
+frontend/web/playwright-report/
+frontend/web/test-results/
+frontend/web/.react-router/
+backend/storage/src/generated/
+*.log
+access-private.pem
+access-public.pem

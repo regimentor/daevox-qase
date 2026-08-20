@@ -1,0 +1,107 @@
+fragment RunCaseFields on TestRunCase {
+  id
+  testRunId
+  projectId
+  sourceTestCaseId
+  assigneeId
+  caseNumber
+  displayId
+  title
+  description
+  preconditions
+  postconditions
+  priority
+  severity
+  type
+  automationStatus
+  estimatedDurationSeconds
+  position
+  currentStatus
+  createdAt
+  updatedAt
+  steps {
+    id
+    testRunCaseId
+    sourceTestStepId
+    position
+    action
+    testData
+    expectedResult
+    createdAt
+    updatedAt
+  }
+}
+fragment RunFields on TestRun {
+  id
+  projectId
+  testPlanId
+  environmentId
+  title
+  status
+  createdBy
+  startedAt
+  completedAt
+  createdAt
+  updatedAt
+  cases {
+    ...RunCaseFields
+  }
+}
+query TestRuns($projectId: UUID!, $status: TestRunStatus, $page: PageInput) {
+  testRuns(projectId: $projectId, status: $status, page: $page) {
+    items {
+      ...RunFields
+    }
+    pageInfo {
+      limit
+      offset
+      total
+    }
+  }
+}
+query TestRun($id: UUID!) {
+  testRun(id: $id) {
+    ...RunFields
+  }
+}
+query RunCase($id: UUID!) {
+  runCase(id: $id) {
+    ...RunCaseFields
+  }
+}
+query RunSummary($runId: UUID!) {
+  runSummary(runId: $runId) {
+    total
+    untested
+    passed
+    failed
+    blocked
+    skipped
+    executed
+    progressPercent
+    passRate
+  }
+}
+mutation CreateTestRun($input: CreateTestRunInput!) {
+  createTestRun(input: $input) {
+    ...RunFields
+  }
+}
+mutation StartTestRun($id: UUID!) {
+  startTestRun(id: $id) {
+    ...RunFields
+  }
+}
+mutation CompleteTestRun($id: UUID!) {
+  completeTestRun(id: $id) {
+    ...RunFields
+  }
+}
+mutation DeleteTestRun($id: UUID!) {
+  deleteTestRun(id: $id)
+}
+mutation AssignRunCases($runId: UUID!, $assigneeId: UUID, $runCaseIds: [UUID!]) {
+  assignRunCases(runId: $runId, assigneeId: $assigneeId, runCaseIds: $runCaseIds) {
+    ...RunFields
+  }
+}
