@@ -8,6 +8,7 @@ export type FrontendErrorCode =
   | 'RESOURCE_NOT_FOUND'
   | 'VALIDATION_ERROR'
   | 'LAST_ADMIN_REQUIRED'
+  | 'SUITE_NOT_EMPTY'
   | 'RUN_SOURCE_INVALID'
   | 'RUN_STATE_INVALID'
   | 'CONFLICT'
@@ -27,6 +28,7 @@ const messages: Partial<Record<FrontendErrorCode, string>> = {
   FORBIDDEN: 'У вас нет прав для этого действия.',
   RESOURCE_NOT_FOUND: 'Объект не найден или недоступен.',
   LAST_ADMIN_REQUIRED: 'В рабочем пространстве должен остаться хотя бы один администратор.',
+  SUITE_NOT_EMPTY: 'Suite можно удалить только если в нём нет тестов и дочерних suites.',
   RUN_SOURCE_INVALID: 'Выберите либо тест-план, либо тест-кейсы.',
   RUN_STATE_INVALID: 'Действие недоступно в текущем состоянии запуска.',
   CONFLICT: 'Действие конфликтует с существующими данными.',

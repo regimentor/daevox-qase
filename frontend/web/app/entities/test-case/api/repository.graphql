@@ -42,7 +42,7 @@ fragment TestCaseFields on TestCase {
   createdAt
   updatedAt
 }
-fragment SuiteFields on TestSuite {
+fragment SuiteFieldsBase on TestSuite {
   id
   projectId
   parentId
@@ -51,25 +51,200 @@ fragment SuiteFields on TestSuite {
   position
   createdAt
   updatedAt
+}
+fragment SuiteFieldsLevel0 on TestSuite {
+  ...SuiteFieldsBase
+}
+fragment SuiteFieldsLevel1 on TestSuite {
+  ...SuiteFieldsBase
   children {
-    id
-    projectId
-    parentId
-    title
-    description
-    position
-    createdAt
-    updatedAt
-    children {
-      id
-      projectId
-      parentId
-      title
-      description
-      position
-      createdAt
-      updatedAt
-    }
+    ...SuiteFieldsLevel0
+  }
+}
+fragment SuiteFieldsLevel2 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel1
+  }
+}
+fragment SuiteFieldsLevel3 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel2
+  }
+}
+fragment SuiteFieldsLevel4 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel3
+  }
+}
+fragment SuiteFieldsLevel5 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel4
+  }
+}
+fragment SuiteFieldsLevel6 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel5
+  }
+}
+fragment SuiteFieldsLevel7 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel6
+  }
+}
+fragment SuiteFieldsLevel8 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel7
+  }
+}
+fragment SuiteFieldsLevel9 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel8
+  }
+}
+fragment SuiteFieldsLevel10 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel9
+  }
+}
+fragment SuiteFieldsLevel11 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel10
+  }
+}
+fragment SuiteFieldsLevel12 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel11
+  }
+}
+fragment SuiteFieldsLevel13 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel12
+  }
+}
+fragment SuiteFieldsLevel14 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel13
+  }
+}
+fragment SuiteFieldsLevel15 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel14
+  }
+}
+fragment SuiteFieldsLevel16 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel15
+  }
+}
+fragment SuiteFieldsLevel17 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel16
+  }
+}
+fragment SuiteFieldsLevel18 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel17
+  }
+}
+fragment SuiteFieldsLevel19 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel18
+  }
+}
+fragment SuiteFieldsLevel20 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel19
+  }
+}
+fragment SuiteFieldsLevel21 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel20
+  }
+}
+fragment SuiteFieldsLevel22 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel21
+  }
+}
+fragment SuiteFieldsLevel23 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel22
+  }
+}
+fragment SuiteFieldsLevel24 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel23
+  }
+}
+fragment SuiteFieldsLevel25 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel24
+  }
+}
+fragment SuiteFieldsLevel26 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel25
+  }
+}
+fragment SuiteFieldsLevel27 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel26
+  }
+}
+fragment SuiteFieldsLevel28 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel27
+  }
+}
+fragment SuiteFieldsLevel29 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel28
+  }
+}
+fragment SuiteFieldsLevel30 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel29
+  }
+}
+fragment SuiteFieldsLevel31 on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel30
+  }
+}
+fragment SuiteFields on TestSuite {
+  ...SuiteFieldsBase
+  children {
+    ...SuiteFieldsLevel31
   }
 }
 query SuiteTree($projectId: UUID!) {
@@ -106,6 +281,16 @@ mutation CreateSuite($projectId: UUID!, $title: String!, $parentId: UUID, $posit
     parentId
     position
   }
+}
+mutation UpdateSuite($id: UUID!, $title: String!) {
+  updateTestSuite(id: $id, input: { title: $title }) {
+    id
+    title
+    parentId
+  }
+}
+mutation DeleteSuite($id: UUID!) {
+  deleteTestSuite(id: $id)
 }
 mutation MoveSuite($suiteId: UUID!, $position: Int!, $parentId: UUID) {
   moveTestSuite(suiteId: $suiteId, position: $position, parentId: $parentId) {
