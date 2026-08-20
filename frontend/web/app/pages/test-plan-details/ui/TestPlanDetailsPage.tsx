@@ -1,6 +1,6 @@
 import { EditOutlined } from '@ant-design/icons';
 import { useQuery } from '@apollo/client/react';
-import { Button, Table, Typography } from 'antd';
+import { Button, Space, Table, Tag } from 'antd';
 import { useState } from 'react';
 import { useProjectContext } from '@/entities/project';
 import { PlanEditor } from '@/features/test-plan-edit';
@@ -35,7 +35,13 @@ export function TestPlanDetailsPage({ planId }: { planId: string }) {
           </Button>
         }
       />
-      <Typography.Title level={3}>Кейсы · {plan.testCases.length}</Typography.Title>
+      <Space wrap style={{ marginBottom: 16 }}>
+        <Tag color="green">Активных кейсов: {plan.activeCaseCount}</Tag>
+        <Tag>Архивных кейсов: {plan.archivedCaseCount}</Tag>
+        {plan.sourceSuites.map((suite) => (
+          <Tag key={suite.id}>Source: {suite.title}</Tag>
+        ))}
+      </Space>
       <Table
         rowKey="id"
         dataSource={plan.testCases}

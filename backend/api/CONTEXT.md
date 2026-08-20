@@ -26,6 +26,8 @@
 - Project case numbers are allocated atomically with serializable transaction retry behavior.
 - Run creation validates and snapshots source cases in a transaction. Snapshot payloads are immutable after creation.
 - Results are append-only; latest status and summaries are selected deterministically by descending creation time and ID.
+- Test plans may reference multiple active source suites. Plan-case links retain separate manual provenance and source-suite provenance; source synchronization is transactional, deduplicated, ordered by suite tree and case number, appends new cases without reordering existing positions, preserves explicit editor ordering, and reports added/removed cases with affected plans.
+- Suites and cases are soft-archived through archive operations. Archive previews report repository scope and affected plans; restore clears only the archive state, while plan/source links are not restored automatically. Restoring an active case can create a new source-derived plan link through normal synchronization.
 - Suite reorder, membership/admin changes, run assignment, result writes, and other multi-row transitions retain their transaction boundaries.
 - Nested membership users use a request-scoped DataLoader. Other nested collections are loaded as deterministic batches by their owning service.
 

@@ -6,6 +6,20 @@ fragment PlanFields on TestPlan {
   createdBy
   createdAt
   updatedAt
+  activeCaseCount
+  archivedCaseCount
+  manualCaseIds
+  sourceSuites {
+    id
+    projectId
+    parentId
+    title
+    description
+    position
+    archivedAt
+    createdAt
+    updatedAt
+  }
   testCases {
     id
     displayId
@@ -40,12 +54,14 @@ mutation CreateTestPlan(
   $title: String!
   $description: String
   $testCaseIds: [UUID!]!
+  $sourceSuiteIds: [UUID!]
 ) {
   createTestPlan(
     projectId: $projectId
     title: $title
     description: $description
     testCaseIds: $testCaseIds
+    sourceSuiteIds: $sourceSuiteIds
   ) {
     ...PlanFields
   }
@@ -58,6 +74,36 @@ mutation UpdateTestPlan($id: UUID!, $input: UpdateTestPlanInput!) {
 mutation ReplaceTestPlanCases($testPlanId: UUID!, $testCaseIds: [UUID!]!) {
   replaceTestPlanCases(testPlanId: $testPlanId, testCaseIds: $testCaseIds) {
     ...PlanFields
+  }
+}
+mutation ReplaceTestPlanSources(
+  $testPlanId: UUID!
+  $sourceSuiteIds: [UUID!]!
+  $manualTestCaseIds: [UUID!]!
+  $orderedTestCaseIds: [UUID!]!
+) {
+  replaceTestPlanSources(
+    testPlanId: $testPlanId
+    sourceSuiteIds: $sourceSuiteIds
+    manualTestCaseIds: $manualTestCaseIds
+    orderedTestCaseIds: $orderedTestCaseIds
+  ) {
+    testPlan {
+      ...PlanFields
+    }
+    addedCaseCount
+    removedCaseCount
+    affectedPlans {
+      planId
+      title
+      addedCaseCount
+      removedCaseCount
+    }
+  }
+}
+query PlanSourceChangePreview($testPlanId: UUID!, $sourceSuiteIds: [UUID!]!) {
+  planSourceChangePreview(testPlanId: $testPlanId, sourceSuiteIds: $sourceSuiteIds) {
+    removedCaseCount
   }
 }
 mutation DeleteTestPlan($id: UUID!) {

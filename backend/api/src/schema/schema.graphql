@@ -176,6 +176,7 @@ type TestSuite {
   description: String
   position: Int!
   children: [TestSuite!]!
+  archivedAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -295,9 +296,43 @@ type TestPlan {
   title: String!
   description: String
   testCases: [TestCase!]!
+  sourceSuites: [TestSuite!]!
+  manualCaseIds: [UUID!]!
+  activeCaseCount: Int!
+  archivedCaseCount: Int!
   createdBy: UUID!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+"Preview of plan cases removed by a source-suite change."
+type TestPlanSourceChangePreview {
+  removedCaseCount: Int!
+}
+"Summary of active plan cases changed by source synchronization."
+type TestPlanSyncAffectedPlan {
+  planId: UUID!
+  title: String!
+  addedCaseCount: Int!
+  removedCaseCount: Int!
+}
+"Result of replacing source suites and synchronizing a plan."
+type TestPlanSourceSyncResult {
+  testPlan: TestPlan!
+  addedCaseCount: Int!
+  removedCaseCount: Int!
+  affectedPlans: [TestPlanSyncAffectedPlan!]!
+}
+"A plan affected by an archive operation."
+type ArchiveImpactPlan {
+  planId: UUID!
+  title: String!
+  affectedCaseCount: Int!
+}
+"Repository impact before archiving a suite or case."
+type ArchiveImpactPreview {
+  suiteCount: Int!
+  caseCount: Int!
+  affectedPlans: [ArchiveImpactPlan!]!
 }
 "Editable plan metadata."
 input UpdateTestPlanInput {
@@ -510,7 +545,9 @@ type Query {
   "One authorized suite."
   suite(id: UUID!): TestSuite!
   "Full ordered suite tree loaded without N+1."
-  suiteTree(projectId: UUID!): [TestSuite!]!
+  suiteTree(projectId: UUID!, includeArchived: Boolean = false): [TestSuite!]!
+  "Preview the repository and plan impact of archiving a suite."
+  suiteArchivePreview(id: UUID!): ArchiveImpactPreview!
   "One authorized source test case."
   testCase(id: UUID!): TestCase!
   "Filtered, searched, sorted and paginated cases."
@@ -520,12 +557,16 @@ type Query {
     sort: TestCaseSort
     page: PageInput
   ): TestCaseConnection!
+  "Preview the plan impact of archiving a case."
+  testCaseArchivePreview(id: UUID!): ArchiveImpactPreview!
   "All project tags sorted by name and id."
   tags(projectId: UUID!): [Tag!]!
   "One plan and its ordered cases."
   testPlan(id: UUID!): TestPlan!
   "Project plans."
   testPlans(projectId: UUID!, page: PageInput): TestPlanConnection!
+  "Preview plan cases removed by changing source suites."
+  planSourceChangePreview(testPlanId: UUID!, sourceSuiteIds: [UUID!]!): TestPlanSourceChangePreview!
   "Project environments."
   environments(projectId: UUID!, page: PageInput): EnvironmentConnection!
   "One run with ordered snapshots."
@@ -584,16 +625,18 @@ type Mutation {
   updateTestSuite(id: UUID!, input: UpdateTestSuiteInput!): TestSuite!
   "Move and reindex source and destination sibling lists atomically."
   moveTestSuite(suiteId: UUID!, position: Int!, parentId: UUID): TestSuite!
-  "Delete an empty suite only."
-  deleteTestSuite(id: UUID!): Boolean!
+  "Archive a suite and its active descendants."
+  archiveTestSuite(id: UUID!): TestSuite!
+  "Restore the archive operation containing a suite."
+  restoreTestSuite(id: UUID!): TestSuite!
   "Allocate a permanent case number and create case content atomically."
   createTestCase(input: CreateTestCaseInput!): TestCase!
   "Update mutable source case fields."
   updateTestCase(id: UUID!, input: UpdateTestCaseInput!): TestCase!
-  "Idempotently archive a source case."
+  "Archive a case and remove its active plan membership."
   archiveTestCase(id: UUID!): TestCase!
-  "Hard-delete a case never referenced by a plan or run."
-  deleteTestCase(id: UUID!): Boolean!
+  "Restore a case without restoring old plan provenance."
+  restoreTestCase(id: UUID!): TestCase!
   "Replace every source step in one transaction."
   replaceTestCaseSteps(testCaseId: UUID!, steps: [TestStepInput!]!): TestCase!
   "Replace all case tags in one transaction."
@@ -607,12 +650,20 @@ type Mutation {
     projectId: UUID!
     title: String!
     testCaseIds: [UUID!]!
+    sourceSuiteIds: [UUID!]
     description: String
   ): TestPlan!
   "Update plan metadata."
   updateTestPlan(id: UUID!, input: UpdateTestPlanInput!): TestPlan!
   "Atomically replace ordered plan cases."
   replaceTestPlanCases(testPlanId: UUID!, testCaseIds: [UUID!]!): TestPlan!
+  "Replace source suites and synchronize active cases transactionally."
+  replaceTestPlanSources(
+    testPlanId: UUID!
+    sourceSuiteIds: [UUID!]!
+    manualTestCaseIds: [UUID!]!
+    orderedTestCaseIds: [UUID!]!
+  ): TestPlanSourceSyncResult!
   "Delete a plan never used by a run."
   deleteTestPlan(id: UUID!): Boolean!
   "Create a project environment."

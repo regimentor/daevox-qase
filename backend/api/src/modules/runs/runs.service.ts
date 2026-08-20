@@ -111,7 +111,12 @@ export class RunsService {
         if (input.testPlanId) {
           const plan = await transaction.testPlan.findFirst({
             where: { id: input.testPlanId, projectId: input.projectId },
-            include: { cases: { orderBy: [{ position: 'asc' }, { id: 'asc' }] } },
+            include: {
+              cases: {
+                where: { archivedAt: null, testCase: { archivedAt: null } },
+                orderBy: [{ position: 'asc' }, { id: 'asc' }],
+              },
+            },
           });
           if (!plan) throw new AppError('RESOURCE_NOT_FOUND', 'Resource not found');
           orderedIds = plan.cases.map((item) => item.testCaseId);

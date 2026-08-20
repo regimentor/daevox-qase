@@ -65,6 +65,11 @@ enum AttachmentStatus {
   READY
 }
 
+enum ArchiveOperationKind {
+  SUITE
+  CASE
+}
+
 model User {
   id              String           @id @default(uuid()) @db.Uuid
   email           String           @unique @db.Citext
@@ -147,8 +152,11 @@ model Project {
   caseTags       TestCaseTag[]
   plans          TestPlan[]
   planCases      TestPlanCase[]
+  planSourceSuites TestPlanSourceSuite[]
+  planCaseSources  TestPlanCaseSource[]
   environments   Environment[]
   runs           TestRun[]
+  archiveOperations ArchiveOperation[]
 
   @@unique([workspaceId, code])
   @@index([workspaceId])
@@ -164,15 +172,21 @@ model TestSuite {
   position    Int
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  archivedAt  DateTime?    @map("archived_at") @db.Timestamptz(3)
+  archiveOperationId String? @map("archive_operation_id") @db.Uuid
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent      TestSuite?   @relation("SuiteTree", fields: [parentId, projectId], references: [id, projectId], onDelete: Restrict)
   children    TestSuite[]  @relation("SuiteTree")
   cases       TestCase[]
+  archiveOperation ArchiveOperation? @relation("SuiteArchive", fields: [archiveOperationId], references: [id], onDelete: SetNull)
+  sourcePlans TestPlanSourceSuite[]
+  caseSources TestPlanCaseSource[]
 
   @@unique([id, projectId])
   @@unique([projectId, parentId, position])
   @@index([projectId])
   @@index([parentId])
+  @@index([archiveOperationId])
   @@map("test_suites")
 }
 
@@ -193,6 +207,7 @@ model TestCase {
   estimatedDurationSeconds Int?               @map("estimated_duration_seconds")
   createdBy                String             @map("created_by") @db.Uuid
   archivedAt               DateTime?          @map("archived_at") @db.Timestamptz(3)
+  archiveOperationId       String?            @map("archive_operation_id") @db.Uuid
   createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
   project                  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -202,6 +217,8 @@ model TestCase {
   steps                    TestStep[]
   tags                     TestCaseTag[]
   planCases                TestPlanCase[]
+  planCaseSources          TestPlanCaseSource[]
+  archiveOperation         ArchiveOperation? @relation("CaseArchive", fields: [archiveOperationId], references: [id], onDelete: SetNull)
   runCases                 TestRunCase[]
 
   @@unique([id, projectId])
@@ -209,6 +226,7 @@ model TestCase {
   @@index([projectId])
   @@index([suiteId])
   @@index([assigneeId])
+  @@index([archiveOperationId])
   @@map("test_cases")
 }
 
@@ -270,6 +288,7 @@ model TestPlan {
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator     User           @relation("PlanCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   cases       TestPlanCase[]
+  sourceSuites TestPlanSourceSuite[]
   runs        TestRun[]
 
   @@unique([id, projectId])
@@ -284,15 +303,63 @@ model TestPlanCase {
   position   Int
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  manual     Boolean  @default(true)
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   testPlan   TestPlan @relation(fields: [testPlanId, projectId], references: [id, projectId], onDelete: Cascade)
   testCase   TestCase @relation(fields: [testCaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  sources    TestPlanCaseSource[]
 
   @@unique([testPlanId, testCaseId])
   @@unique([testPlanId, position])
   @@index([testPlanId])
   @@index([testCaseId])
+  @@index([testPlanId, archivedAt])
   @@map("test_plan_cases")
+}
+
+model TestPlanSourceSuite {
+  projectId   String   @map("project_id") @db.Uuid
+  testPlanId  String   @map("test_plan_id") @db.Uuid
+  testSuiteId String   @map("test_suite_id") @db.Uuid
+  position    Int
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testPlan    TestPlan @relation(fields: [testPlanId, projectId], references: [id, projectId], onDelete: Cascade)
+  testSuite   TestSuite @relation(fields: [testSuiteId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@id([testPlanId, testSuiteId])
+  @@index([testSuiteId, projectId])
+  @@map("test_plan_source_suites")
+}
+
+model TestPlanCaseSource {
+  projectId     String       @map("project_id") @db.Uuid
+  testPlanId    String       @map("test_plan_id") @db.Uuid
+  testCaseId    String       @map("test_case_id") @db.Uuid
+  sourceSuiteId String       @map("source_suite_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  planCase      TestPlanCase @relation(fields: [testPlanId, testCaseId], references: [testPlanId, testCaseId], onDelete: Cascade)
+  testCase      TestCase     @relation(fields: [testCaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  sourceSuite   TestSuite     @relation(fields: [sourceSuiteId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@id([testPlanId, testCaseId, sourceSuiteId])
+  @@index([sourceSuiteId, projectId])
+  @@map("test_plan_case_sources")
+}
+
+model ArchiveOperation {
+  id        String              @id @default(uuid()) @db.Uuid
+  projectId String              @map("project_id") @db.Uuid
+  kind      ArchiveOperationKind
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  suites    TestSuite[]         @relation("SuiteArchive")
+  cases     TestCase[]          @relation("CaseArchive")
+
+  @@index([projectId, kind])
+  @@map("archive_operations")
 }
 
 model Environment {

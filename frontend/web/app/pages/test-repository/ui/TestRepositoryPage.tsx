@@ -5,7 +5,7 @@ import {
   RocketOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { App, Button, Checkbox, Input, Select, Space, Tag } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -16,6 +16,8 @@ import { SuiteTree } from '@/widgets/suite-tree';
 import { TestCaseTable } from '@/widgets/test-case-table';
 import {
   ArchiveTestCaseDocument,
+  RestoreTestCaseDocument,
+  TestCaseArchivePreviewDocument,
   SortDirection,
   TestCasesDocument,
   TestCaseSortField,
@@ -65,23 +67,40 @@ export function TestRepositoryPage() {
     },
   });
   const [archive] = useMutation(ArchiveTestCaseDocument, { refetchQueries: [TestCasesDocument] });
+  const [restore] = useMutation(RestoreTestCaseDocument, { refetchQueries: [TestCasesDocument] });
+  const [preview] = useLazyQuery(TestCaseArchivePreviewDocument);
   const update = (patch: Partial<typeof filters>) =>
     setParams(serializeRepositoryFilters({ ...filters, ...patch, page: patch.page ?? 1 }));
-  const archiveCase = (item: TestCaseFieldsFragment) =>
-    modal.confirm({
-      title: `Архивировать ${item.displayId}?`,
-      content: 'Кейс исчезнет из активного repository, история запусков сохранится.',
-      okText: 'Архивировать',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await archive({ variables: { id: item.id } });
-          void message.success('Тест-кейс архивирован');
-        } catch (error) {
-          void message.error(toFrontendError(error).message);
-        }
-      },
-    });
+  const archiveCase = async (item: TestCaseFieldsFragment) => {
+    try {
+      const result = await preview({ variables: { id: item.id } });
+      const impact = result.data?.testCaseArchivePreview;
+      modal.confirm({
+        title: `Архивировать ${item.displayId}?`,
+        content: `Кейс будет архивирован. Планов: ${impact?.affectedPlans.length ?? 0}; активных plan-case связей: ${impact?.affectedPlans.reduce((sum, plan) => sum + plan.affectedCaseCount, 0) ?? 0}.`,
+        okText: 'Архивировать',
+        okButtonProps: { danger: true },
+        onOk: async () => {
+          try {
+            await archive({ variables: { id: item.id } });
+            void message.success('Тест-кейс архивирован');
+          } catch (error) {
+            void message.error(toFrontendError(error).message);
+          }
+        },
+      });
+    } catch (error) {
+      void message.error(toFrontendError(error).message);
+    }
+  };
+  const restoreCase = async (item: TestCaseFieldsFragment) => {
+    try {
+      await restore({ variables: { id: item.id } });
+      void message.success('Тест-кейс восстановлен');
+    } catch (error) {
+      void message.error(toFrontendError(error).message);
+    }
+  };
   const active = [
     ['priority', filters.priority && labels.priority[filters.priority]],
     ['severity', filters.severity && labels.severity[filters.severity]],
@@ -121,6 +140,7 @@ export function TestRepositoryPage() {
             projectId={project.id}
             selected={filters.suiteId}
             disabled={readOnly}
+            includeArchived={filters.includeArchived}
             onSelect={(suiteId) => update({ suiteId })}
           />
         </aside>
@@ -234,6 +254,7 @@ export function TestRepositoryPage() {
                 onPageChange={(page, pageSize) => update({ page, pageSize })}
                 onOpen={setDrawerCase}
                 onArchive={archiveCase}
+                onRestore={restoreCase}
                 emptyText={
                   filters.search || active.some(([, label]) => label)
                     ? 'По фильтрам ничего не найдено'
@@ -250,7 +271,7 @@ export function TestRepositoryPage() {
           projectId={project.id}
           testCase={drawerCase === 'new' ? undefined : drawerCase}
           defaultSuiteId={filters.suiteId}
-          readOnly={readOnly}
+          readOnly={readOnly || (drawerCase !== 'new' && Boolean(drawerCase.archivedAt))}
           onClose={() => setDrawerCase(undefined)}
         />
       )}

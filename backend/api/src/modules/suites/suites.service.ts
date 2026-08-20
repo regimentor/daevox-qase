@@ -7,6 +7,7 @@ import { withTransactionRetry } from '../../common/transaction-retry.js';
 import { PrismaService } from '../../infrastructure/prisma.service.js';
 import type { UpdateTestSuiteInput } from '../../generated/graphql.js';
 import { TenantService } from '../workspaces/tenant.service.js';
+import { PlanSyncService } from '../plans/plan-sync.service.js';
 
 type SuiteNode = Awaited<ReturnType<PrismaService['client']['testSuite']['findFirst']>> & {
   children: SuiteNode[];
@@ -17,6 +18,7 @@ export class SuitesService {
   public constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantService,
+    private readonly sync: PlanSyncService,
   ) {}
 
   public async get(userId: string, id: string) {
@@ -28,9 +30,17 @@ export class SuitesService {
   }
 
   public async tree(userId: string, projectId: string): Promise<SuiteNode[]> {
+    return this.treeWithArchive(userId, projectId, false);
+  }
+
+  public async treeWithArchive(
+    userId: string,
+    projectId: string,
+    includeArchived: boolean,
+  ): Promise<SuiteNode[]> {
     await this.tenant.project(userId, projectId);
     const rows = await this.prisma.client.testSuite.findMany({
-      where: { projectId },
+      where: { projectId, ...(includeArchived ? {} : { archivedAt: null }) },
       orderBy: [{ position: 'asc' }, { id: 'asc' }],
     });
     const nodes = new Map<string, SuiteNode>();
@@ -88,6 +98,7 @@ export class SuitesService {
 
   public async update(userId: string, id: string, input: UpdateTestSuiteInput) {
     const suite = await this.get(userId, id);
+    if (suite.archivedAt) throw new AppError('VALIDATION_ERROR', 'Archived suite is read-only');
     await this.tenant.project(userId, suite.projectId, true);
     const data: Prisma.TestSuiteUpdateInput = {};
     if (input.title !== undefined && input.title !== null)
@@ -110,7 +121,11 @@ export class SuitesService {
       this.prisma.client.$transaction(
         async (transaction) => {
           const suite = await transaction.testSuite.findFirst({
-            where: { id: suiteId, project: { workspace: { members: { some: { userId } } } } },
+            where: {
+              id: suiteId,
+              archivedAt: null,
+              project: { workspace: { members: { some: { userId } } } },
+            },
           });
           if (!suite) throw new AppError('RESOURCE_NOT_FOUND', 'Resource not found');
           await transaction.$queryRaw`SELECT id FROM projects WHERE id = ${suite.projectId}::uuid FOR UPDATE`;
@@ -118,12 +133,12 @@ export class SuitesService {
           if (parentId === suite.id)
             throw new AppError('SUITE_CYCLE', 'A suite cannot be its own parent');
           const all = await transaction.testSuite.findMany({
-            where: { projectId: suite.projectId },
+            where: { projectId: suite.projectId, archivedAt: null },
             orderBy: [{ position: 'asc' }, { id: 'asc' }],
           });
           if (parentId) {
             invariant(
-              all.some((candidate) => candidate.id === parentId),
+              all.some((candidate) => candidate.id === parentId && candidate.archivedAt === null),
               'RESOURCE_NOT_FOUND',
               'Resource not found',
             );
@@ -181,24 +196,128 @@ export class SuitesService {
     );
   }
 
-  public async delete(userId: string, id: string): Promise<boolean> {
+  public async archivePreview(userId: string, id: string) {
+    const suite = await this.get(userId, id);
+    if (suite.archivedAt) return { suiteCount: 0, caseCount: 0, affectedPlans: [] };
+    return this.prisma.client.$transaction(async (transaction) => {
+      const descendants = await this.descendantIds(transaction, suite.projectId, id);
+      const caseIds = await transaction.testCase.findMany({
+        where: { projectId: suite.projectId, suiteId: { in: descendants }, archivedAt: null },
+        select: { id: true },
+      });
+      return {
+        suiteCount: descendants.length,
+        caseCount: caseIds.length,
+        affectedPlans: await this.sync.impactedPlans(
+          transaction,
+          suite.projectId,
+          caseIds.map((item) => item.id),
+        ),
+      };
+    });
+  }
+
+  public async archive(userId: string, id: string) {
     const suite = await this.get(userId, id);
     await this.tenant.project(userId, suite.projectId, true);
     return this.prisma.client.$transaction(async (transaction) => {
-      const [children, cases] = await Promise.all([
-        transaction.testSuite.count({ where: { parentId: id } }),
-        transaction.testCase.count({ where: { suiteId: id } }),
-      ]);
-      if (children > 0 || cases > 0)
-        throw new AppError('SUITE_NOT_EMPTY', 'Suite must be empty before deletion');
-      await transaction.testSuite.delete({ where: { id } });
-      const siblings = await transaction.testSuite.findMany({
-        where: { projectId: suite.projectId, parentId: suite.parentId },
-        orderBy: [{ position: 'asc' }, { id: 'asc' }],
+      const current = await transaction.testSuite.findFirst({
+        where: { id, projectId: suite.projectId, archivedAt: null },
       });
-      await this.reindex(transaction, siblings);
-      return true;
+      if (!current) return { ...suite, children: [] };
+      await transaction.$queryRaw`SELECT id FROM projects WHERE id = ${suite.projectId}::uuid FOR UPDATE`;
+      const suiteIds = await this.descendantIds(transaction, suite.projectId, id);
+      const caseRows = await transaction.testCase.findMany({
+        where: { projectId: suite.projectId, suiteId: { in: suiteIds }, archivedAt: null },
+        select: { id: true },
+      });
+      const archivedAt = new Date();
+      const operation = await transaction.archiveOperation.create({
+        data: { projectId: suite.projectId, kind: 'SUITE' },
+      });
+      await transaction.testSuite.updateMany({
+        where: { projectId: suite.projectId, id: { in: suiteIds } },
+        data: { archivedAt, archiveOperationId: operation.id },
+      });
+      await transaction.testCase.updateMany({
+        where: { projectId: suite.projectId, id: { in: caseRows.map((item) => item.id) } },
+        data: { archivedAt, archiveOperationId: operation.id },
+      });
+      await this.sync.archiveCaseLinks(
+        transaction,
+        suite.projectId,
+        caseRows.map((item) => item.id),
+        archivedAt,
+      );
+      await transaction.testPlanSourceSuite.deleteMany({
+        where: { projectId: suite.projectId, testSuiteId: { in: suiteIds } },
+      });
+      return { ...current, archivedAt, archiveOperationId: operation.id, children: [] };
     });
+  }
+
+  public async restore(userId: string, id: string) {
+    const suite = await this.get(userId, id);
+    await this.tenant.project(userId, suite.projectId, true);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const current = await transaction.testSuite.findFirst({
+        where: { id, projectId: suite.projectId, archivedAt: { not: null } },
+      });
+      if (!current?.archiveOperationId)
+        throw new AppError('RESOURCE_NOT_FOUND', 'Resource not found');
+      const operation = await transaction.archiveOperation.findFirst({
+        where: { id: current.archiveOperationId, projectId: suite.projectId, kind: 'SUITE' },
+      });
+      if (!operation) throw new AppError('RESOURCE_NOT_FOUND', 'Resource not found');
+      if (current.parentId) {
+        const parent = await transaction.testSuite.findFirst({
+          where: { id: current.parentId, projectId: suite.projectId },
+          select: { archivedAt: true, archiveOperationId: true },
+        });
+        if (parent?.archivedAt && parent.archiveOperationId !== operation.id)
+          throw new AppError('SUITE_ARCHIVED', 'Suite is archived');
+      }
+      const archived = await transaction.testSuite.findMany({
+        where: { projectId: suite.projectId, archiveOperationId: operation.id },
+      });
+      const ids = new Set(archived.map((item) => item.id));
+      const root = archived.find((item) => !item.parentId || !ids.has(item.parentId)) ?? current;
+      await transaction.testSuite.updateMany({
+        where: { projectId: suite.projectId, archiveOperationId: operation.id },
+        data: { archivedAt: null, archiveOperationId: null },
+      });
+      await transaction.testCase.updateMany({
+        where: { projectId: suite.projectId, archiveOperationId: operation.id },
+        data: { archivedAt: null, archiveOperationId: null },
+      });
+      const maxPosition = await transaction.testSuite.aggregate({
+        where: { projectId: suite.projectId, parentId: root.parentId },
+        _max: { position: true },
+      });
+      await transaction.testSuite.update({
+        where: { id: root.id },
+        data: { position: (maxPosition._max.position ?? -1) + 1 },
+      });
+      return { ...current, archivedAt: null, archiveOperationId: null, children: [] };
+    });
+  }
+
+  private async descendantIds(
+    transaction: Prisma.TransactionClient,
+    projectId: string,
+    rootId: string,
+  ): Promise<string[]> {
+    const rows = await transaction.testSuite.findMany({
+      where: { projectId, archivedAt: null },
+      select: { id: true, parentId: true },
+    });
+    const result: string[] = [];
+    const visit = (id: string) => {
+      result.push(id);
+      for (const child of rows.filter((row) => row.parentId === id)) visit(child.id);
+    };
+    visit(rootId);
+    return result;
   }
 
   private async assertParent(
@@ -210,7 +329,7 @@ export class SuitesService {
     let depth = 0;
     while (cursor) {
       const parent: { parentId: string | null } | null = await transaction.testSuite.findFirst({
-        where: { id: cursor, projectId },
+        where: { id: cursor, projectId, archivedAt: null },
         select: { parentId: true },
       });
       if (!parent) throw new AppError('RESOURCE_NOT_FOUND', 'Resource not found');

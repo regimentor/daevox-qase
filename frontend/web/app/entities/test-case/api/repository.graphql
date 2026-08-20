@@ -51,6 +51,7 @@ fragment SuiteFieldsBase on TestSuite {
   position
   createdAt
   updatedAt
+  archivedAt
 }
 fragment SuiteFieldsLevel0 on TestSuite {
   ...SuiteFieldsBase
@@ -247,8 +248,8 @@ fragment SuiteFields on TestSuite {
     ...SuiteFieldsLevel31
   }
 }
-query SuiteTree($projectId: UUID!) {
-  suiteTree(projectId: $projectId) {
+query SuiteTree($projectId: UUID!, $includeArchived: Boolean = false) {
+  suiteTree(projectId: $projectId, includeArchived: $includeArchived) {
     ...SuiteFields
   }
 }
@@ -289,8 +290,32 @@ mutation UpdateSuite($id: UUID!, $title: String!) {
     parentId
   }
 }
-mutation DeleteSuite($id: UUID!) {
-  deleteTestSuite(id: $id)
+mutation ArchiveSuite($id: UUID!) {
+  archiveTestSuite(id: $id) {
+    id
+    title
+    parentId
+    archivedAt
+  }
+}
+mutation RestoreSuite($id: UUID!) {
+  restoreTestSuite(id: $id) {
+    id
+    title
+    parentId
+    archivedAt
+  }
+}
+query SuiteArchivePreview($id: UUID!) {
+  suiteArchivePreview(id: $id) {
+    suiteCount
+    caseCount
+    affectedPlans {
+      planId
+      title
+      affectedCaseCount
+    }
+  }
 }
 mutation MoveSuite($suiteId: UUID!, $position: Int!, $parentId: UUID) {
   moveTestSuite(suiteId: $suiteId, position: $position, parentId: $parentId) {
@@ -322,6 +347,22 @@ mutation ReplaceTestCaseTags($testCaseId: UUID!, $tagIds: [UUID!]!) {
 mutation ArchiveTestCase($id: UUID!) {
   archiveTestCase(id: $id) {
     ...TestCaseFields
+  }
+}
+mutation RestoreTestCase($id: UUID!) {
+  restoreTestCase(id: $id) {
+    ...TestCaseFields
+  }
+}
+query TestCaseArchivePreview($id: UUID!) {
+  testCaseArchivePreview(id: $id) {
+    suiteCount
+    caseCount
+    affectedPlans {
+      planId
+      title
+      affectedCaseCount
+    }
   }
 }
 mutation CreateTag($projectId: UUID!, $name: String!) {

@@ -30,6 +30,7 @@ import {
 } from './modules/domain.resolver.js';
 import { EnvironmentsService } from './modules/environments/environments.service.js';
 import { PlansService } from './modules/plans/plans.service.js';
+import { PlanSyncService } from './modules/plans/plan-sync.service.js';
 import { ProjectsService } from './modules/projects/projects.service.js';
 import { ResultsService } from './modules/results/results.service.js';
 import { RunsService } from './modules/runs/runs.service.js';
@@ -86,6 +87,7 @@ const config = loadConfig(process.env);
     SuitesService,
     TestCasesService,
     PlansService,
+    PlanSyncService,
     EnvironmentsService,
     RunsService,
     ResultsService,

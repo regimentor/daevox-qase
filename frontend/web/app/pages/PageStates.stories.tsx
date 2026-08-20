@@ -67,6 +67,10 @@ const plan = {
   createdBy: 'user-1',
   createdAt: now,
   updatedAt: now,
+  activeCaseCount: 1,
+  archivedCaseCount: 0,
+  manualCaseIds: [testCaseFixture.id],
+  sourceSuites: [],
   testCases: [testCaseFixture],
 };
 const environment = {
@@ -263,7 +267,7 @@ export const PlanDetailsData: Story = {
     msw: [graphql.query('TestPlan', () => HttpResponse.json({ data: { testPlan: plan } }))],
   },
   render: () => projectFrame(<TestPlanDetailsPage planId={plan.id} />),
-  play: waitFor('Кейсы · 1'),
+  play: waitFor('Активных кейсов: 1'),
 };
 export const PlanDetailsError: Story = {
   parameters: { msw: [graphError('TestPlan')] },

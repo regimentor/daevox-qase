@@ -27,6 +27,8 @@ Stories are application-level compositions for boundary checking even when coloc
 - Do not deep-import into another slice when a public API exists.
 - GraphQL operations live under `app/**/*.graphql`; generated types and typed documents live at `app/shared/api/graphql/generated.ts` and must not be edited manually.
 - The API remains the authority for authentication, authorization, tenant isolation, and persistence. Client route protection improves UX but cannot replace server checks.
+- The repository supports an archive mode for suites and cases. Active views hide archived objects by default; archive actions show an API impact preview, and restore actions do not assume that old plan/source links are restored.
+- Plan editing supports multiple source suites and manual case provenance. The source-suite selector uses the active suite tree, while active and archived case counts are shown separately on plan list/detail views. Saving source changes also persists the displayed case order and reports synchronization counts from the API.
 - Keep attachment upload/download flows aligned with the API's presigned object-storage contract; file bytes should not be routed through GraphQL.
 
 ## Data and routing

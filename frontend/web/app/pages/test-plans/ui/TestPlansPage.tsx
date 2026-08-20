@@ -75,7 +75,11 @@ export function TestPlansPage() {
                 </Space>
               ),
             },
-            { title: 'Кейсов', render: (_, item) => item.testCases.length },
+            {
+              title: 'Кейсов',
+              render: (_, item) =>
+                `${item.activeCaseCount} активных · ${item.archivedCaseCount} архивных`,
+            },
             { title: 'Обновлён', dataIndex: 'updatedAt', render: formatDate },
             {
               title: 'Действия',

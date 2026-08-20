@@ -4,15 +4,18 @@ import {
   FolderAddOutlined,
   FolderOutlined,
   MoreOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
-import { useMutation, useQuery } from '@apollo/client/react';
-import { App, Button, Dropdown, Form, Input, Modal, Space, Tree, Typography } from 'antd';
+import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
+import { App, Button, Dropdown, Form, Input, Modal, Space, Tag, Tree, Typography } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ArchiveSuiteDocument,
   CreateSuiteDocument,
-  DeleteSuiteDocument,
   MoveSuiteDocument,
+  RestoreSuiteDocument,
+  SuiteArchivePreviewDocument,
   SuiteTreeDocument,
   UpdateSuiteDocument,
 } from '@/shared/api/graphql';
@@ -23,14 +26,23 @@ type SuiteNode = {
   id: string;
   parentId: string | null;
   title: string;
+  archivedAt?: string | null;
   children?: readonly SuiteNode[];
+};
+
+type ArchiveConfirmation = {
+  suite: SuiteNode;
+  suiteCount: number;
+  caseCount: number;
+  affectedPlans: Array<{ title: string; affectedCaseCount: number }>;
 };
 
 function toNodes(
   suites: readonly SuiteNode[],
   disabled: boolean,
   onRename: (suite: SuiteNode) => void,
-  onDelete: (suite: SuiteNode) => void,
+  onArchive: (suite: SuiteNode) => void,
+  onRestore: (suite: SuiteNode) => void,
 ): DataNode[] {
   return suites
     .filter((suite) => Boolean(suite.id))
@@ -46,29 +58,29 @@ function toNodes(
             width: '100%',
           }}
         >
-          <Typography.Text ellipsis>{suite.title}</Typography.Text>
+          <Typography.Text ellipsis>
+            {suite.title} {suite.archivedAt && <Tag>Архив</Tag>}
+          </Typography.Text>
           <Dropdown
             trigger={['click']}
             placement="bottomRight"
             menu={{
-              items: [
-                {
-                  key: 'rename',
-                  label: 'Переименовать',
-                  icon: <EditOutlined />,
-                  disabled,
-                },
-                {
-                  key: 'delete',
-                  label: 'Удалить',
-                  icon: <DeleteOutlined />,
-                  danger: true,
-                  disabled,
-                },
-              ],
+              items: suite.archivedAt
+                ? [{ key: 'restore', label: 'Восстановить', icon: <RollbackOutlined />, disabled }]
+                : [
+                    { key: 'rename', label: 'Переименовать', icon: <EditOutlined />, disabled },
+                    {
+                      key: 'archive',
+                      label: 'Архивировать',
+                      icon: <DeleteOutlined />,
+                      danger: true,
+                      disabled,
+                    },
+                  ],
               onClick: ({ key }) => {
                 if (key === 'rename') onRename(suite);
-                if (key === 'delete') onDelete(suite);
+                if (key === 'archive') onArchive(suite);
+                if (key === 'restore') onRestore(suite);
               },
             }}
           >
@@ -83,7 +95,7 @@ function toNodes(
         </div>
       ),
       icon: <FolderOutlined />,
-      children: toNodes(suite.children ?? [], disabled, onRename, onDelete),
+      children: toNodes(suite.children ?? [], disabled, onRename, onArchive, onRestore),
     }));
 }
 
@@ -91,34 +103,58 @@ export function SuiteTree({
   projectId,
   selected,
   disabled,
+  includeArchived = false,
   onSelect,
 }: {
   projectId: string;
   selected?: string;
   disabled?: boolean;
+  includeArchived?: boolean;
   onSelect(id?: string): void;
 }) {
   const { message } = App.useApp();
   const [parentId, setParentId] = useState<string | null>();
   const [renaming, setRenaming] = useState<SuiteNode>();
-  const [deleting, setDeleting] = useState<SuiteNode>();
+  const [archiving, setArchiving] = useState<ArchiveConfirmation>();
   const [form] = Form.useForm<{ title: string }>();
   const [renameForm] = Form.useForm<{ title: string }>();
-  const query = useQuery(SuiteTreeDocument, { variables: { projectId } });
+  const query = useQuery(SuiteTreeDocument, { variables: { projectId, includeArchived } });
+  const [preview] = useLazyQuery(SuiteArchivePreviewDocument);
   const [create, createState] = useMutation(CreateSuiteDocument, {
     refetchQueries: [SuiteTreeDocument],
   });
   const [update, updateState] = useMutation(UpdateSuiteDocument);
-  const [remove, removeState] = useMutation(DeleteSuiteDocument);
+  const [archive, archiveState] = useMutation(ArchiveSuiteDocument);
+  const [restore, restoreState] = useMutation(RestoreSuiteDocument);
   const [move] = useMutation(MoveSuiteDocument);
 
   useEffect(() => {
     if (renaming) renameForm.setFieldsValue({ title: renaming.title });
   }, [renameForm, renaming]);
 
-  const actionDisabled = Boolean(disabled || updateState.loading || removeState.loading);
+  const actionDisabled = Boolean(
+    disabled || updateState.loading || archiveState.loading || restoreState.loading,
+  );
   const openRename = (suite: SuiteNode) => setRenaming(suite);
-  const openDelete = (suite: SuiteNode) => setDeleting(suite);
+  const openArchive = async (suite: SuiteNode) => {
+    try {
+      const result = await preview({ variables: { id: suite.id } });
+      const impact = result.data?.suiteArchivePreview;
+      if (impact) setArchiving({ suite, ...impact });
+    } catch (error) {
+      void message.error(toFrontendError(error).message);
+    }
+  };
+  const openRestore = async (suite: SuiteNode) => {
+    try {
+      await restore({ variables: { id: suite.id } });
+      await query.refetch();
+      onSelect(suite.id);
+      void message.success('Suite восстановлен');
+    } catch (error) {
+      void message.error(toFrontendError(error).message);
+    }
+  };
   const nodes = useMemo(
     () => [
       {
@@ -128,7 +164,8 @@ export function SuiteTree({
           (query.data?.suiteTree ?? []) as readonly SuiteNode[],
           actionDisabled,
           openRename,
-          openDelete,
+          openArchive,
+          openRestore,
         ),
       },
     ],
@@ -163,15 +200,14 @@ export function SuiteTree({
     }
   };
 
-  const deleteSuite = async () => {
-    if (!deleting) return;
-    const suite = deleting;
+  const archiveSuite = async () => {
+    if (!archiving) return;
     try {
-      await remove({ variables: { id: suite.id } });
+      await archive({ variables: { id: archiving.suite.id } });
       await query.refetch();
-      setDeleting(undefined);
-      if (selected === suite.id) onSelect(suite.parentId ?? undefined);
-      void message.success('Suite удалён');
+      setArchiving(undefined);
+      if (selected === archiving.suite.id) onSelect(archiving.suite.parentId ?? undefined);
+      void message.success('Suite архивирован');
     } catch (error) {
       void message.error(toFrontendError(error).message);
     }
@@ -209,7 +245,7 @@ export function SuiteTree({
       <Space className="suite-tree-heading">
         <Typography.Text strong>Test suites</Typography.Text>
         <Dropdown
-          disabled={disabled}
+          disabled={disabled || includeArchived}
           menu={{
             items: [{ key: 'root', label: 'Новый корневой suite', icon: <FolderAddOutlined /> }],
             onClick: () => setParentId(null),
@@ -222,7 +258,7 @@ export function SuiteTree({
         blockNode
         showIcon
         defaultExpandedKeys={['all']}
-        draggable={!disabled}
+        draggable={!disabled && !includeArchived}
         treeData={nodes}
         selectedKeys={[selected ?? 'all']}
         onSelect={(keys) => onSelect(keys[0] === 'all' ? undefined : String(keys[0]))}
@@ -266,19 +302,27 @@ export function SuiteTree({
         </Form>
       </Modal>
       <Modal
-        title="Удалить suite?"
-        open={Boolean(deleting)}
-        onCancel={() => setDeleting(undefined)}
-        onOk={() => void deleteSuite()}
-        okText="Удалить"
+        title="Архивировать suite?"
+        open={Boolean(archiving)}
+        onCancel={() => setArchiving(undefined)}
+        onOk={() => void archiveSuite()}
+        okText="Архивировать"
         cancelText="Отмена"
-        okButtonProps={{ danger: true, loading: removeState.loading }}
+        okButtonProps={{ danger: true, loading: archiveState.loading }}
         destroyOnHidden
       >
         <Typography.Paragraph>
-          Удалить suite «{deleting?.title}»? Suite можно удалить только если в нём нет тестов и
-          дочерних suites.
+          Suite «{archiving?.suite.title}» и её поддерево: suites — {archiving?.suiteCount}, кейсы —{' '}
+          {archiving?.caseCount}.
         </Typography.Paragraph>
+        {archiving?.affectedPlans.length ? (
+          <Typography.Paragraph>
+            Затронутые планы:{' '}
+            {archiving.affectedPlans
+              .map((plan) => `${plan.title} (${plan.affectedCaseCount})`)
+              .join(', ')}
+          </Typography.Paragraph>
+        ) : null}
       </Modal>
     </section>
   );

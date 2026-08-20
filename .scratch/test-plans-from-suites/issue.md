@@ -1,6 +1,6 @@
 # Создание и синхронизация test plans из suites
 
-Status: ready
+Status: in-progress
 Owner: Codex
 
 ## Problem
@@ -88,7 +88,11 @@ Test plans сейчас создаются из вручную выбранны�
 
 ## Implementation notes
 
-Задача создана после согласования дизайна. Реализация пока не начиналась.
+Задача создана после согласования дизайна. Реализация в процессе: добавлены source suites/provenance и soft archive в storage/API, GraphQL-контракт, web-сценарии, ADR и контекстная документация. Добавлен e2e-сценарий синхронизации plan из suites, но запуск полного e2e пока невозможен в окружении без Docker/Testcontainers runtime.
+
+Проверки: `npm run build`, `npm run typecheck`, `npm run lint`, `npm run codegen:check`, `npm run db:generate`, `npx prisma validate` и `npm run test:web` выполнены успешно; `npm run test:e2e` и `npm run test:coverage` заблокированы отсутствием container runtime, `npm run test:storybook -w @app/web` — запретом sandbox на bind локального порта.
+
+После review исправлены archive-aware run snapshots, глобально безопасные plan/suite positions, provenance при архивировании descendants, combined 10,000-case validation, persistence of editor ordering, и structured source-sync summary. `npm run build`, `npm run typecheck`, `npm run lint`, `npm run codegen:check` и `npm run test:web` повторно проходят; container-backed e2e по-прежнему требует runtime.
 
 Ожидаемые затронутые контексты: `backend/api`, `backend/storage`, `frontend/web`.
 
@@ -96,4 +100,4 @@ Test plans сейчас создаются из вручную выбранны�
 
 ## Blockers
 
-Нет.
+Для закрытия issue нужны запуск миграции/e2e на окружении с PostgreSQL, MinIO и Docker/Testcontainers, а также Storybook browser check вне текущего sandbox.

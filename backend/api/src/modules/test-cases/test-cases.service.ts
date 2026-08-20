@@ -14,6 +14,7 @@ import type {
 } from '../../generated/graphql.js';
 import { SortDirection, TestCaseSortField } from '../../generated/graphql.js';
 import { TenantService } from '../workspaces/tenant.service.js';
+import { PlanSyncService } from '../plans/plan-sync.service.js';
 
 const caseInclude = {
   project: { select: { code: true } },
@@ -37,6 +38,7 @@ export class TestCasesService {
   public constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantService,
+    private readonly sync: PlanSyncService,
   ) {}
 
   public async get(userId: string, id: string) {
@@ -161,6 +163,7 @@ export class TestCasesService {
                   tagId,
                 })),
               });
+            await this.sync.syncCase(transaction, input.projectId, testCase.id);
             return this.load(transaction, testCase.id);
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -170,60 +173,101 @@ export class TestCasesService {
   }
 
   public async update(userId: string, id: string, input: UpdateTestCaseInput) {
-    const current = await this.get(userId, id);
-    const project = await this.tenant.project(userId, current.projectId, true);
-    if (current.archivedAt) throw new AppError('TEST_CASE_ARCHIVED', 'Test case is archived');
-    if (input.suiteId) {
-      const suite = await this.prisma.client.testSuite.findFirst({
-        where: { id: input.suiteId, projectId: current.projectId },
+    return this.prisma.client.$transaction(async (transaction) => {
+      const current = await transaction.testCase.findFirst({
+        where: { id, project: { workspace: { members: { some: { userId } } } } },
       });
-      if (!suite) throw new AppError('RESOURCE_NOT_FOUND', 'Resource not found');
-    }
-    if (input.assigneeId) await this.tenant.member(project.workspaceId, input.assigneeId);
-    const data: Prisma.TestCaseUpdateInput = {};
-    if (input.suiteId !== undefined && input.suiteId !== null)
-      data.suite = { connect: { id: input.suiteId } };
-    if (input.title !== undefined && input.title !== null)
-      data.title = text(input.title, 'title', limits.title);
-    if (input.description !== undefined)
-      data.description = optionalText(input.description, 'description');
-    if (input.preconditions !== undefined)
-      data.preconditions = optionalText(input.preconditions, 'preconditions');
-    if (input.postconditions !== undefined)
-      data.postconditions = optionalText(input.postconditions, 'postconditions');
-    if (input.priority !== undefined && input.priority !== null) data.priority = input.priority;
-    if (input.severity !== undefined && input.severity !== null) data.severity = input.severity;
-    if (input.type !== undefined && input.type !== null) data.type = input.type;
-    if (input.automationStatus !== undefined && input.automationStatus !== null)
-      data.automationStatus = input.automationStatus;
-    if (input.assigneeId !== undefined)
-      data.assignee = input.assigneeId
-        ? { connect: { id: input.assigneeId } }
-        : { disconnect: true };
-    if (input.estimatedDurationSeconds !== undefined)
-      data.estimatedDurationSeconds = this.duration(input.estimatedDurationSeconds);
-    await this.prisma.client.testCase.update({ where: { id }, data });
-    return this.get(userId, id);
+      if (!current) throw new AppError('RESOURCE_NOT_FOUND', 'Resource not found');
+      const project = await this.tenant.project(userId, current.projectId, true, transaction);
+      if (current.archivedAt) throw new AppError('TEST_CASE_ARCHIVED', 'Test case is archived');
+      if (input.suiteId) {
+        const suite = await transaction.testSuite.findFirst({
+          where: { id: input.suiteId, projectId: current.projectId, archivedAt: null },
+        });
+        if (!suite) throw new AppError('RESOURCE_NOT_FOUND', 'Resource not found');
+      }
+      if (input.assigneeId)
+        await this.tenant.member(project.workspaceId, input.assigneeId, transaction);
+      const data: Prisma.TestCaseUpdateInput = {};
+      if (input.suiteId !== undefined && input.suiteId !== null)
+        data.suite = { connect: { id: input.suiteId } };
+      if (input.title !== undefined && input.title !== null)
+        data.title = text(input.title, 'title', limits.title);
+      if (input.description !== undefined)
+        data.description = optionalText(input.description, 'description');
+      if (input.preconditions !== undefined)
+        data.preconditions = optionalText(input.preconditions, 'preconditions');
+      if (input.postconditions !== undefined)
+        data.postconditions = optionalText(input.postconditions, 'postconditions');
+      if (input.priority !== undefined && input.priority !== null) data.priority = input.priority;
+      if (input.severity !== undefined && input.severity !== null) data.severity = input.severity;
+      if (input.type !== undefined && input.type !== null) data.type = input.type;
+      if (input.automationStatus !== undefined && input.automationStatus !== null)
+        data.automationStatus = input.automationStatus;
+      if (input.assigneeId !== undefined)
+        data.assignee = input.assigneeId
+          ? { connect: { id: input.assigneeId } }
+          : { disconnect: true };
+      if (input.estimatedDurationSeconds !== undefined)
+        data.estimatedDurationSeconds = this.duration(input.estimatedDurationSeconds);
+      await transaction.testCase.update({ where: { id }, data });
+      await this.sync.syncCase(transaction, current.projectId, id);
+      return this.load(transaction, id);
+    });
   }
 
   public async archive(userId: string, id: string) {
     const current = await this.get(userId, id);
     await this.tenant.project(userId, current.projectId, true);
-    if (!current.archivedAt)
-      await this.prisma.client.testCase.update({ where: { id }, data: { archivedAt: new Date() } });
-    return this.get(userId, id);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const row = await transaction.testCase.findFirst({
+        where: { id, projectId: current.projectId, archivedAt: null },
+      });
+      if (!row) return this.load(transaction, id);
+      const archivedAt = new Date();
+      const operation = await transaction.archiveOperation.create({
+        data: { projectId: current.projectId, kind: 'CASE' },
+      });
+      await transaction.testCase.update({
+        where: { id },
+        data: { archivedAt, archiveOperationId: operation.id },
+      });
+      await this.sync.archiveCaseLinks(transaction, current.projectId, [id], archivedAt);
+      return this.load(transaction, id);
+    });
   }
 
-  public async delete(userId: string, id: string): Promise<boolean> {
+  public async restore(userId: string, id: string) {
     const current = await this.get(userId, id);
     await this.tenant.project(userId, current.projectId, true);
-    const [plans, runs] = await Promise.all([
-      this.prisma.client.testPlanCase.count({ where: { testCaseId: id } }),
-      this.prisma.client.testRunCase.count({ where: { sourceTestCaseId: id } }),
-    ]);
-    invariant(plans === 0 && runs === 0, 'CONFLICT', 'Referenced test case cannot be deleted');
-    await this.prisma.client.testCase.delete({ where: { id } });
-    return true;
+    return this.prisma.client.$transaction(async (transaction) => {
+      const row = await transaction.testCase.findFirst({
+        where: { id, projectId: current.projectId, archivedAt: { not: null } },
+      });
+      if (!row) return this.load(transaction, id);
+      const suite = await transaction.testSuite.findFirst({
+        where: { id: row.suiteId, projectId: row.projectId, archivedAt: null },
+      });
+      if (!suite) throw new AppError('SUITE_ARCHIVED', 'Suite is archived');
+      await transaction.testCase.update({
+        where: { id },
+        data: { archivedAt: null, archiveOperationId: null },
+      });
+      await this.sync.syncCase(transaction, row.projectId, id);
+      return this.load(transaction, id);
+    });
+  }
+
+  public async archivePreview(userId: string, id: string) {
+    const current = await this.get(userId, id);
+    if (current.archivedAt) return { suiteCount: 0, caseCount: 0, affectedPlans: [] };
+    return {
+      suiteCount: 0,
+      caseCount: 1,
+      affectedPlans: await this.prisma.client.$transaction((transaction) =>
+        this.sync.impactedPlans(transaction, current.projectId, [id]),
+      ),
+    };
   }
 
   public replaceSteps(userId: string, testCaseId: string, steps: TestStepInput[]) {
@@ -337,7 +381,9 @@ export class TestCasesService {
     assigneeId: string | null | undefined,
     tagIds: string[],
   ): Promise<void> {
-    const suite = await transaction.testSuite.count({ where: { id: suiteId, projectId } });
+    const suite = await transaction.testSuite.count({
+      where: { id: suiteId, projectId, archivedAt: null },
+    });
     invariant(suite === 1, 'RESOURCE_NOT_FOUND', 'Resource not found');
     if (assigneeId) await this.tenant.member(workspaceId, assigneeId, transaction);
     const tags = await transaction.tag.count({ where: { id: { in: tagIds }, projectId } });

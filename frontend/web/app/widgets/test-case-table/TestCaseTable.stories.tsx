@@ -15,6 +15,7 @@ const meta = {
     onPageChange: fn(),
     onOpen: fn(),
     onArchive: fn(),
+    onRestore: fn(),
   },
 } satisfies Meta<typeof TestCaseTable>;
 export default meta;

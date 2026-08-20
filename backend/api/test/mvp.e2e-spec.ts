@@ -413,6 +413,134 @@ describe('Daevox MVP GraphQL walkthrough', () => {
     expect(foreign.body.errors[0].extensions.stacktrace).toBeUndefined();
   });
 
+  it('creates and synchronizes plans from source suites with archive-safe case membership', async () => {
+    const sourceRoot = (
+      await graphql<{ createTestSuite: Identifier }>(
+        'mutation($projectId:UUID!){createTestSuite(projectId:$projectId,title:"Source root"){id}}',
+        { projectId: project.id },
+        member.accessToken,
+      )
+    ).createTestSuite;
+    const sourceChild = (
+      await graphql<{ createTestSuite: Identifier }>(
+        'mutation($projectId:UUID!,$parentId:UUID!){createTestSuite(projectId:$projectId,parentId:$parentId,title:"Source child"){id}}',
+        { projectId: project.id, parentId: sourceRoot.id },
+        member.accessToken,
+      )
+    ).createTestSuite;
+    const secondSource = (
+      await graphql<{ createTestSuite: Identifier }>(
+        'mutation($projectId:UUID!){createTestSuite(projectId:$projectId,title:"Second source"){id}}',
+        { projectId: project.id },
+        member.accessToken,
+      )
+    ).createTestSuite;
+    const createCase = async (suiteId: string, title: string) =>
+      (
+        await graphql<{ createTestCase: Identifier }>(
+          'mutation($input:CreateTestCaseInput!){createTestCase(input:$input){id}}',
+          {
+            input: {
+              projectId: project.id,
+              suiteId,
+              title,
+              priority: 'MEDIUM',
+              severity: 'NORMAL',
+              type: 'FUNCTIONAL',
+              automationStatus: 'MANUAL',
+            },
+          },
+          member.accessToken,
+        )
+      ).createTestCase;
+    const childCase = await createCase(sourceChild.id, 'Child source case');
+    const secondCase = await createCase(secondSource.id, 'Second source case');
+    const createdPlan = (
+      await graphql<{
+        createTestPlan: {
+          id: string;
+          testCases: Array<Identifier>;
+          manualCaseIds: string[];
+          sourceSuites: Array<Identifier>;
+        };
+      }>(
+        'mutation($projectId:UUID!,$sources:[UUID!]!){createTestPlan(projectId:$projectId,title:"Source plan",testCaseIds:[],sourceSuiteIds:$sources){id testCases{id} manualCaseIds sourceSuites{id}}}',
+        { projectId: project.id, sources: [secondSource.id, sourceRoot.id] },
+        member.accessToken,
+      )
+    ).createTestPlan;
+    expect(createdPlan.testCases.map((item) => item.id)).toEqual([childCase.id, secondCase.id]);
+    expect(createdPlan.manualCaseIds).toEqual([]);
+    expect(createdPlan.sourceSuites.map((item) => item.id)).toEqual([
+      sourceRoot.id,
+      secondSource.id,
+    ]);
+
+    const manualUpdate = await graphql<{
+      replaceTestPlanSources: {
+        testPlan: { manualCaseIds: string[]; testCases: Array<Identifier> };
+        addedCaseCount: number;
+        removedCaseCount: number;
+      };
+    }>(
+      'mutation($id:UUID!,$sources:[UUID!]!,$manual:[UUID!]!,$ordered:[UUID!]!){replaceTestPlanSources(testPlanId:$id,sourceSuiteIds:$sources,manualTestCaseIds:$manual,orderedTestCaseIds:$ordered){testPlan{manualCaseIds testCases{id}} addedCaseCount removedCaseCount}}',
+      {
+        id: createdPlan.id,
+        sources: [sourceRoot.id, secondSource.id],
+        manual: [testCase.id],
+        ordered: [secondCase.id, childCase.id, testCase.id],
+      },
+      member.accessToken,
+    );
+    expect(manualUpdate.replaceTestPlanSources.testPlan.manualCaseIds).toEqual([testCase.id]);
+    expect(manualUpdate.replaceTestPlanSources.testPlan.testCases.map((item) => item.id)).toEqual([
+      secondCase.id,
+      childCase.id,
+      testCase.id,
+    ]);
+    expect(manualUpdate.replaceTestPlanSources.addedCaseCount).toBe(1);
+    expect(manualUpdate.replaceTestPlanSources.removedCaseCount).toBe(0);
+
+    const newChildCase = await createCase(sourceChild.id, 'New child source case');
+    const afterCreate = await graphql<{
+      testPlan: { testCases: Array<Identifier>; activeCaseCount: number };
+    }>(
+      'query($id:UUID!){testPlan(id:$id){testCases{id} activeCaseCount}}',
+      { id: createdPlan.id },
+      member.accessToken,
+    );
+    expect(afterCreate.testPlan.testCases.map((item) => item.id)).toEqual([
+      childCase.id,
+      secondCase.id,
+      testCase.id,
+      newChildCase.id,
+    ]);
+    expect(afterCreate.testPlan.activeCaseCount).toBe(4);
+
+    await graphql(
+      'mutation($id:UUID!){archiveTestCase(id:$id){id archivedAt}}',
+      { id: childCase.id },
+      member.accessToken,
+    );
+    const afterArchive = await graphql<{ testPlan: { activeCaseCount: number } }>(
+      'query($id:UUID!){testPlan(id:$id){activeCaseCount}}',
+      { id: createdPlan.id },
+      member.accessToken,
+    );
+    expect(afterArchive.testPlan.activeCaseCount).toBe(3);
+    await graphql(
+      'mutation($id:UUID!){restoreTestCase(id:$id){id archivedAt}}',
+      { id: childCase.id },
+      member.accessToken,
+    );
+    const afterRestore = await graphql<{ testPlan: { activeCaseCount: number } }>(
+      'query($id:UUID!){testPlan(id:$id){activeCaseCount}}',
+      { id: createdPlan.id },
+      member.accessToken,
+    );
+    expect(afterRestore.testPlan.activeCaseCount).toBe(4);
+  });
+
   it('allocates case numbers safely under concurrent GraphQL mutations and supports filters/search/pagination', async () => {
     const create = (index: number) =>
       graphql<{ createTestCase: { id: string; caseNumber: number } }>(
@@ -542,13 +670,22 @@ describe('Daevox MVP GraphQL walkthrough', () => {
     );
     const parent = tree.suiteTree.find((item) => item.id === rootA.id);
     expect(parent?.children.map((item) => item.position)).toEqual([0, 1]);
-    expect(
-      await graphqlError(
-        'mutation($id:UUID!){deleteTestSuite(id:$id)}',
-        { id: rootA.id },
-        member.accessToken,
-      ),
-    ).toBe('SUITE_NOT_EMPTY');
+    await graphql(
+      'mutation($id:UUID!){archiveTestSuite(id:$id){id archivedAt}}',
+      { id: rootA.id },
+      member.accessToken,
+    );
+    const hiddenTree = await graphql<{ suiteTree: Array<{ id: string }> }>(
+      'query($id:UUID!){suiteTree(projectId:$id){id}}',
+      { id: project.id },
+      member.accessToken,
+    );
+    expect(hiddenTree.suiteTree.some((item) => item.id === rootA.id)).toBe(false);
+    await graphql(
+      'mutation($id:UUID!){restoreTestSuite(id:$id){id archivedAt}}',
+      { id: rootA.id },
+      member.accessToken,
+    );
     await graphql(
       'mutation($suite:UUID!){moveTestSuite(suiteId:$suite,parentId:null,position:1){id}}',
       { suite: rootB.id },
@@ -1239,7 +1376,7 @@ describe('Daevox MVP GraphQL walkthrough', () => {
       member.accessToken,
     );
     await graphql(
-      'mutation($id:UUID!){deleteTestCase(id:$id)}',
+      'mutation($id:UUID!){archiveTestCase(id:$id){id archivedAt}}',
       { id: disposableCase.id },
       member.accessToken,
     );
@@ -1249,7 +1386,7 @@ describe('Daevox MVP GraphQL walkthrough', () => {
       member.accessToken,
     );
     await graphql(
-      'mutation($id:UUID!){deleteTestSuite(id:$id)}',
+      'mutation($id:UUID!){archiveTestSuite(id:$id){id archivedAt}}',
       { id: disposableSuite.id },
       member.accessToken,
     );

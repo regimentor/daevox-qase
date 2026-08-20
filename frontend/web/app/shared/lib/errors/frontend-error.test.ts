@@ -30,13 +30,11 @@ describe('GraphQL error mapping', () => {
     expect(applyServerFieldErrors(form as never, error).message).toContain('администратор');
     expect(form.setFields).toHaveBeenCalled();
   });
-  it('maps a non-empty suite deletion error', () => {
+  it('maps an archived suite error', () => {
     const error = new CombinedGraphQLErrors({
-      errors: [{ message: 'raw', extensions: { code: 'SUITE_NOT_EMPTY' } }],
+      errors: [{ message: 'raw', extensions: { code: 'SUITE_ARCHIVED' } }],
     });
-    expect(toFrontendError(error).message).toBe(
-      'Suite можно удалить только если в нём нет тестов и дочерних suites.',
-    );
+    expect(toFrontendError(error).message).toBe('Suite архивирован. Сначала восстановите его.');
   });
   it('maps network and unknown errors', () => {
     expect(toFrontendError(new TypeError('fetch')).code).toBe('NETWORK_ERROR');

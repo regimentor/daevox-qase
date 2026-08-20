@@ -27,10 +27,15 @@ const plan = {
   createdBy: 'user-1',
   createdAt: now,
   updatedAt: now,
+  activeCaseCount: 1,
+  archivedCaseCount: 0,
+  manualCaseIds: ['case-1'],
+  sourceSuites: [],
   testCases: [firstCase],
 };
 const queryHandlers = [
   graphql.query('TestPlan', () => HttpResponse.json({ data: { testPlan: plan } })),
+  graphql.query('SuiteTree', () => HttpResponse.json({ data: { suiteTree: [] } })),
   graphql.query('TestCases', () =>
     HttpResponse.json({
       data: {
@@ -63,8 +68,19 @@ export const EditReorderAndSave: Story = {
       graphql.mutation('UpdateTestPlan', () =>
         HttpResponse.json({ data: { updateTestPlan: { ...plan, title: 'Smoke updated' } } }),
       ),
-      graphql.mutation('ReplaceTestPlanCases', () =>
-        HttpResponse.json({ data: { replaceTestPlanCases: plan } }),
+      graphql.mutation('ReplaceTestPlanSources', () =>
+        HttpResponse.json({
+          data: {
+            replaceTestPlanSources: {
+              testPlan: plan,
+              addedCaseCount: 1,
+              removedCaseCount: 0,
+              affectedPlans: [
+                { planId: plan.id, title: plan.title, addedCaseCount: 1, removedCaseCount: 0 },
+              ],
+            },
+          },
+        }),
       ),
     ],
   },
@@ -83,7 +99,6 @@ export const EditReorderAndSave: Story = {
     if (down) await userEvent.click(down);
     const up = page.getAllByRole('button', { name: 'Переместить выше' })[1];
     if (up) await userEvent.click(up);
-    await userEvent.click(page.getAllByRole('button', { name: 'Удалить из плана' })[1]!);
     await userEvent.click(page.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(args.onSaved).toHaveBeenCalled());
   },

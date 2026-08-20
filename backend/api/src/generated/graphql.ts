@@ -279,6 +279,7 @@ export interface TestSuite {
     description?: Nullable<string>;
     position: number;
     children: TestSuite[];
+    archivedAt?: Nullable<DateTime>;
     createdAt: DateTime;
     updatedAt: DateTime;
 }
@@ -342,9 +343,48 @@ export interface TestPlan {
     title: string;
     description?: Nullable<string>;
     testCases: TestCase[];
+    sourceSuites: TestSuite[];
+    manualCaseIds: UUID[];
+    activeCaseCount: number;
+    archivedCaseCount: number;
     createdBy: UUID;
     createdAt: DateTime;
     updatedAt: DateTime;
+}
+
+export interface TestPlanSourceChangePreview {
+    __typename?: 'TestPlanSourceChangePreview';
+    removedCaseCount: number;
+}
+
+export interface TestPlanSyncAffectedPlan {
+    __typename?: 'TestPlanSyncAffectedPlan';
+    planId: UUID;
+    title: string;
+    addedCaseCount: number;
+    removedCaseCount: number;
+}
+
+export interface TestPlanSourceSyncResult {
+    __typename?: 'TestPlanSourceSyncResult';
+    testPlan: TestPlan;
+    addedCaseCount: number;
+    removedCaseCount: number;
+    affectedPlans: TestPlanSyncAffectedPlan[];
+}
+
+export interface ArchiveImpactPlan {
+    __typename?: 'ArchiveImpactPlan';
+    planId: UUID;
+    title: string;
+    affectedCaseCount: number;
+}
+
+export interface ArchiveImpactPreview {
+    __typename?: 'ArchiveImpactPreview';
+    suiteCount: number;
+    caseCount: number;
+    affectedPlans: ArchiveImpactPlan[];
 }
 
 export interface TestPlanConnection {
@@ -521,12 +561,15 @@ export interface IQuery {
     projects(workspaceId: UUID, page?: Nullable<PageInput>): ProjectConnection | Promise<ProjectConnection>;
     project(id: UUID): Project | Promise<Project>;
     suite(id: UUID): TestSuite | Promise<TestSuite>;
-    suiteTree(projectId: UUID): TestSuite[] | Promise<TestSuite[]>;
+    suiteTree(projectId: UUID, includeArchived?: Nullable<boolean>): TestSuite[] | Promise<TestSuite[]>;
+    suiteArchivePreview(id: UUID): ArchiveImpactPreview | Promise<ArchiveImpactPreview>;
     testCase(id: UUID): TestCase | Promise<TestCase>;
     testCases(projectId: UUID, filter?: Nullable<TestCaseFilter>, sort?: Nullable<TestCaseSort>, page?: Nullable<PageInput>): TestCaseConnection | Promise<TestCaseConnection>;
+    testCaseArchivePreview(id: UUID): ArchiveImpactPreview | Promise<ArchiveImpactPreview>;
     tags(projectId: UUID): Tag[] | Promise<Tag[]>;
     testPlan(id: UUID): TestPlan | Promise<TestPlan>;
     testPlans(projectId: UUID, page?: Nullable<PageInput>): TestPlanConnection | Promise<TestPlanConnection>;
+    planSourceChangePreview(testPlanId: UUID, sourceSuiteIds: UUID[]): TestPlanSourceChangePreview | Promise<TestPlanSourceChangePreview>;
     environments(projectId: UUID, page?: Nullable<PageInput>): EnvironmentConnection | Promise<EnvironmentConnection>;
     testRun(id: UUID): TestRun | Promise<TestRun>;
     testRuns(projectId: UUID, status?: Nullable<TestRunStatus>, page?: Nullable<PageInput>): TestRunConnection | Promise<TestRunConnection>;
@@ -555,18 +598,20 @@ export interface IMutation {
     createTestSuite(projectId: UUID, title: string, parentId?: Nullable<UUID>, description?: Nullable<string>, position?: Nullable<number>): TestSuite | Promise<TestSuite>;
     updateTestSuite(id: UUID, input: UpdateTestSuiteInput): TestSuite | Promise<TestSuite>;
     moveTestSuite(suiteId: UUID, position: number, parentId?: Nullable<UUID>): TestSuite | Promise<TestSuite>;
-    deleteTestSuite(id: UUID): boolean | Promise<boolean>;
+    archiveTestSuite(id: UUID): TestSuite | Promise<TestSuite>;
+    restoreTestSuite(id: UUID): TestSuite | Promise<TestSuite>;
     createTestCase(input: CreateTestCaseInput): TestCase | Promise<TestCase>;
     updateTestCase(id: UUID, input: UpdateTestCaseInput): TestCase | Promise<TestCase>;
     archiveTestCase(id: UUID): TestCase | Promise<TestCase>;
-    deleteTestCase(id: UUID): boolean | Promise<boolean>;
+    restoreTestCase(id: UUID): TestCase | Promise<TestCase>;
     replaceTestCaseSteps(testCaseId: UUID, steps: TestStepInput[]): TestCase | Promise<TestCase>;
     replaceTestCaseTags(testCaseId: UUID, tagIds: UUID[]): TestCase | Promise<TestCase>;
     createTag(projectId: UUID, name: string): Tag | Promise<Tag>;
     deleteTag(id: UUID): boolean | Promise<boolean>;
-    createTestPlan(projectId: UUID, title: string, testCaseIds: UUID[], description?: Nullable<string>): TestPlan | Promise<TestPlan>;
+    createTestPlan(projectId: UUID, title: string, testCaseIds: UUID[], sourceSuiteIds?: Nullable<UUID[]>, description?: Nullable<string>): TestPlan | Promise<TestPlan>;
     updateTestPlan(id: UUID, input: UpdateTestPlanInput): TestPlan | Promise<TestPlan>;
     replaceTestPlanCases(testPlanId: UUID, testCaseIds: UUID[]): TestPlan | Promise<TestPlan>;
+    replaceTestPlanSources(testPlanId: UUID, sourceSuiteIds: UUID[], manualTestCaseIds: UUID[], orderedTestCaseIds: UUID[]): TestPlanSourceSyncResult | Promise<TestPlanSourceSyncResult>;
     deleteTestPlan(id: UUID): boolean | Promise<boolean>;
     createEnvironment(projectId: UUID, name: string, description?: Nullable<string>): Environment | Promise<Environment>;
     updateEnvironment(id: UUID, input: UpdateEnvironmentInput): Environment | Promise<Environment>;

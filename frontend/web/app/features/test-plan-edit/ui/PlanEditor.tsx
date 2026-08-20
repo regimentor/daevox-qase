@@ -4,7 +4,7 @@ import {
   DeleteOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import {
   Alert,
   App,
@@ -16,18 +16,32 @@ import {
   Modal,
   Space,
   Table,
+  TreeSelect,
   Typography,
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import {
   CreateTestPlanDocument,
-  ReplaceTestPlanCasesDocument,
+  PlanSourceChangePreviewDocument,
+  ReplaceTestPlanSourcesDocument,
+  SuiteTreeDocument,
   TestCasesDocument,
   TestPlanDocument,
   TestPlansDocument,
   UpdateTestPlanDocument,
 } from '@/shared/api/graphql';
 import { applyServerFieldErrors } from '@/shared/lib/errors';
+
+type SuiteTreeItem = { id: string; title: string; children?: readonly SuiteTreeItem[] };
+type SuiteOption = { key: string; value: string; title: string; children?: SuiteOption[] };
+
+const suiteOptions = (items: readonly SuiteTreeItem[]): SuiteOption[] =>
+  items.map((suite) => ({
+    key: suite.id,
+    value: suite.id,
+    title: suite.title,
+    ...(suite.children?.length ? { children: suiteOptions(suite.children) } : {}),
+  }));
 
 export function PlanEditor({
   open,
@@ -45,6 +59,8 @@ export function PlanEditor({
   const { message, modal } = App.useApp();
   const [form] = Form.useForm<{ title: string; description?: string }>();
   const [caseIds, setCaseIds] = useState<string[]>([]);
+  const [manualCaseIds, setManualCaseIds] = useState<string[]>([]);
+  const [sourceSuiteIds, setSourceSuiteIds] = useState<string[]>([]);
   const [selector, setSelector] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string>();
@@ -57,14 +73,21 @@ export function PlanEditor({
     skip: !selector,
     fetchPolicy: 'network-only',
   });
+  const suites = useQuery(SuiteTreeDocument, {
+    variables: { projectId, includeArchived: false },
+    skip: !open,
+  });
   const [create, createState] = useMutation(CreateTestPlanDocument);
   const [update, updateState] = useMutation(UpdateTestPlanDocument);
-  const [replace] = useMutation(ReplaceTestPlanCasesDocument);
+  const [replaceSources] = useMutation(ReplaceTestPlanSourcesDocument);
+  const [sourcePreview] = useLazyQuery(PlanSourceChangePreviewDocument);
   useEffect(() => {
     if (!open) return;
     const value = plan.data?.testPlan;
     form.setFieldsValue({ title: value?.title ?? '', description: value?.description ?? '' });
     setCaseIds(value?.testCases.map((item) => item.id) ?? []);
+    setManualCaseIds(value?.manualCaseIds ?? []);
+    setSourceSuiteIds(value?.sourceSuites.map((suite) => suite.id) ?? []);
     setDirty(false);
     setError(undefined);
   }, [open, plan.data, form]);
@@ -89,14 +112,62 @@ export function PlanEditor({
     setError(undefined);
     try {
       let id = planId;
+      let successMessage = 'Тест-план сохранён';
       if (id) {
+        const previous = plan.data?.testPlan;
+        const previousSources = previous?.sourceSuites.map((suite) => suite.id) ?? [];
+        const previousManual = previous?.manualCaseIds ?? [];
+        const previousOrder = previous?.testCases.map((testCase) => testCase.id) ?? [];
+        const sourcesChanged =
+          previousSources.length !== sourceSuiteIds.length ||
+          previousSources.some((suiteId) => !sourceSuiteIds.includes(suiteId));
+        const manualChanged =
+          previousManual.length !== manualCaseIds.length ||
+          previousManual.some((caseId) => !manualCaseIds.includes(caseId));
+        const orderChanged =
+          previousOrder.length !== caseIds.length ||
+          previousOrder.some((caseId, index) => caseIds[index] !== caseId);
+        if (sourcesChanged) {
+          const result = await sourcePreview({
+            variables: { testPlanId: id, sourceSuiteIds },
+          });
+          const removed = result.data?.planSourceChangePreview.removedCaseCount ?? 0;
+          if (removed) {
+            const confirmed = await new Promise<boolean>((resolve) =>
+              modal.confirm({
+                title: 'Удалить кейсы из плана?',
+                content: `Из-за изменения source suites будут удалены ${removed} кейс(ов), если они не выбраны вручную и не покрываются другой suite.`,
+                okText: 'Продолжить',
+                cancelText: 'Отмена',
+                okButtonProps: { danger: true },
+                onOk: () => resolve(true),
+                onCancel: () => resolve(false),
+              }),
+            );
+            if (!confirmed) return;
+          }
+        }
         await update({
           variables: {
             id,
             input: { title: values.title.trim(), description: values.description?.trim() || null },
           },
         });
-        await replace({ variables: { testPlanId: id, testCaseIds: caseIds } });
+        if (sourcesChanged || manualChanged || orderChanged) {
+          const result = await replaceSources({
+            variables: {
+              testPlanId: id,
+              sourceSuiteIds,
+              manualTestCaseIds: manualCaseIds,
+              orderedTestCaseIds: caseIds,
+            },
+          });
+          const summary = result.data?.replaceTestPlanSources;
+          const details = summary
+            ? `Добавлено: ${summary.addedCaseCount}, удалено: ${summary.removedCaseCount}`
+            : '';
+          successMessage = `Синхронизация тест-плана завершена. ${details}`.trim();
+        }
       } else {
         const result = await create({
           variables: {
@@ -104,6 +175,7 @@ export function PlanEditor({
             title: values.title.trim(),
             description: values.description?.trim() || null,
             testCaseIds: caseIds,
+            sourceSuiteIds,
           },
           refetchQueries: [
             {
@@ -116,7 +188,7 @@ export function PlanEditor({
       }
       if (id) {
         setDirty(false);
-        void message.success('Тест-план сохранён');
+        void message.success(successMessage);
         onSaved?.(id);
         onClose();
       }
@@ -154,6 +226,21 @@ export function PlanEditor({
         </Form.Item>
         <Form.Item label="Описание" name="description">
           <Input.TextArea rows={3} />
+        </Form.Item>
+        <Form.Item label="Source suites">
+          <TreeSelect
+            treeData={suiteOptions(suites.data?.suiteTree ?? [])}
+            treeCheckable
+            showCheckedStrategy={TreeSelect.SHOW_PARENT}
+            value={sourceSuiteIds}
+            onChange={(values) => {
+              setSourceSuiteIds(values as string[]);
+              setDirty(true);
+            }}
+            loading={suites.loading}
+            placeholder="Выберите suites"
+            style={{ width: '100%' }}
+          />
         </Form.Item>
         <Space style={{ marginBottom: 12 }}>
           <Typography.Title level={5} style={{ margin: 0 }}>
@@ -201,6 +288,7 @@ export function PlanEditor({
                     aria-label="Удалить из плана"
                     onClick={() => {
                       setCaseIds((ids) => ids.filter((_, itemIndex) => itemIndex !== index));
+                      setManualCaseIds((ids) => ids.filter((id) => id !== caseIds[index]));
                       setDirty(true);
                     }}
                   />
@@ -241,6 +329,9 @@ export function PlanEditor({
                   aria-label={`Выбрать ${item.displayId}`}
                   onChange={(event) => {
                     setCaseIds((ids) =>
+                      event.target.checked ? [...ids, item.id] : ids.filter((id) => id !== item.id),
+                    );
+                    setManualCaseIds((ids) =>
                       event.target.checked ? [...ids, item.id] : ids.filter((id) => id !== item.id),
                     );
                     setDirty(true);

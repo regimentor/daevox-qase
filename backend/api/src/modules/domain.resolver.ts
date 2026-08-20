@@ -84,8 +84,15 @@ export class DomainResolver {
   @Query() public suiteTree(
     @CurrentUser() user: AuthenticatedUser,
     @Args('projectId') projectId: string,
+    @Args('includeArchived') includeArchived?: boolean,
   ) {
-    return this.suites.tree(user.id, projectId);
+    return this.suites.treeWithArchive(user.id, projectId, includeArchived ?? false);
+  }
+  @Query() public suiteArchivePreview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('id') id: string,
+  ) {
+    return this.suites.archivePreview(user.id, id);
   }
   @Query() public testCase(@CurrentUser() user: AuthenticatedUser, @Args('id') id: string) {
     return this.cases.get(user.id, id);
@@ -98,6 +105,12 @@ export class DomainResolver {
     @Args('page') page?: PageInput,
   ) {
     return this.cases.list(user.id, projectId, filter, sort, page);
+  }
+  @Query() public testCaseArchivePreview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('id') id: string,
+  ) {
+    return this.cases.archivePreview(user.id, id);
   }
   @Query() public tags(
     @CurrentUser() user: AuthenticatedUser,
@@ -114,6 +127,13 @@ export class DomainResolver {
     @Args('page') page?: PageInput,
   ) {
     return this.plans.list(user.id, projectId, page);
+  }
+  @Query() public planSourceChangePreview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('testPlanId') testPlanId: string,
+    @Args('sourceSuiteIds') sourceSuiteIds: string[],
+  ) {
+    return this.plans.sourcePreview(user.id, testPlanId, sourceSuiteIds);
   }
   @Query() public environments(
     @CurrentUser() user: AuthenticatedUser,
@@ -246,11 +266,17 @@ export class DomainResolver {
   ) {
     return this.suites.move(user.id, suiteId, parentId, position);
   }
-  @Mutation() public deleteTestSuite(
+  @Mutation() public archiveTestSuite(
     @CurrentUser() user: AuthenticatedUser,
     @Args('id') id: string,
   ) {
-    return this.suites.delete(user.id, id);
+    return this.suites.archive(user.id, id);
+  }
+  @Mutation() public restoreTestSuite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('id') id: string,
+  ) {
+    return this.suites.restore(user.id, id);
   }
   @Mutation() public createTestCase(
     @CurrentUser() user: AuthenticatedUser,
@@ -271,11 +297,11 @@ export class DomainResolver {
   ) {
     return this.cases.archive(user.id, id);
   }
-  @Mutation() public deleteTestCase(
+  @Mutation() public restoreTestCase(
     @CurrentUser() user: AuthenticatedUser,
     @Args('id') id: string,
   ) {
-    return this.cases.delete(user.id, id);
+    return this.cases.restore(user.id, id);
   }
   @Mutation() public replaceTestCaseSteps(
     @CurrentUser() user: AuthenticatedUser,
@@ -307,8 +333,16 @@ export class DomainResolver {
     @Args('title') title: string,
     @Args('description') description: string | null | undefined,
     @Args('testCaseIds') testCaseIds: string[],
+    @Args('sourceSuiteIds') sourceSuiteIds?: string[] | null,
   ) {
-    return this.plans.create(user.id, projectId, title, description, testCaseIds);
+    return this.plans.create(
+      user.id,
+      projectId,
+      title,
+      description,
+      testCaseIds,
+      sourceSuiteIds ?? [],
+    );
   }
   @Mutation() public updateTestPlan(
     @CurrentUser() user: AuthenticatedUser,
@@ -323,6 +357,21 @@ export class DomainResolver {
     @Args('testCaseIds') testCaseIds: string[],
   ) {
     return this.plans.replaceCases(user.id, testPlanId, testCaseIds);
+  }
+  @Mutation() public replaceTestPlanSources(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('testPlanId') testPlanId: string,
+    @Args('sourceSuiteIds') sourceSuiteIds: string[],
+    @Args('manualTestCaseIds') manualTestCaseIds: string[],
+    @Args('orderedTestCaseIds') orderedTestCaseIds: string[],
+  ) {
+    return this.plans.replaceSources(
+      user.id,
+      testPlanId,
+      sourceSuiteIds,
+      manualTestCaseIds,
+      orderedTestCaseIds,
+    );
   }
   @Mutation() public deleteTestPlan(
     @CurrentUser() user: AuthenticatedUser,

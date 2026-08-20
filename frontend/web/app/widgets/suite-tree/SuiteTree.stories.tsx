@@ -16,6 +16,7 @@ const handlers = [
             position: 0,
             createdAt: '2026-08-20T00:00:00Z',
             updatedAt: '2026-08-20T00:00:00Z',
+            archivedAt: null,
             children: [
               {
                 id: 'suite-2',
@@ -26,6 +27,7 @@ const handlers = [
                 position: 0,
                 createdAt: '2026-08-20T00:00:00Z',
                 updatedAt: '2026-08-20T00:00:00Z',
+                archivedAt: null,
                 children: [],
               },
             ],
@@ -40,8 +42,18 @@ const updateHandler = graphql.mutation('UpdateSuite', () =>
     data: { updateTestSuite: { id: 'suite-1', title: 'Учётные записи', parentId: null } },
   }),
 );
-const deleteHandler = graphql.mutation('DeleteSuite', () =>
-  HttpResponse.json({ data: { deleteTestSuite: true } }),
+const previewHandler = graphql.query('SuiteArchivePreview', () =>
+  HttpResponse.json({
+    data: {
+      suiteArchivePreview: { suiteCount: 2, caseCount: 3, affectedPlans: [] },
+    },
+  }),
+);
+const archiveHandler = graphql.mutation('ArchiveSuite', () =>
+  HttpResponse.json({ data: { archiveTestSuite: { id: 'suite-1', archivedAt: '2026-08-21' } } }),
+);
+const restoreHandler = graphql.mutation('RestoreSuite', () =>
+  HttpResponse.json({ data: { restoreTestSuite: { id: 'suite-1', archivedAt: null } } }),
 );
 const meta = {
   title: 'Repository/Suite tree',
@@ -70,32 +82,31 @@ export const RenameSuccess: Story = {
     await expect(body.findByText('Suite переименован')).resolves.toBeVisible();
   },
 };
-export const DeleteSuccess: Story = {
+export const ArchiveSuccess: Story = {
   args: { selected: 'suite-1' },
-  parameters: { msw: [...handlers, deleteHandler] },
+  parameters: { msw: [...handlers, previewHandler, archiveHandler] },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     const body = within(document.body);
     await userEvent.click(
       canvas.getByRole('button', { name: 'Действия для suite Аутентификация' }),
     );
-    await userEvent.click(await body.findByText('Удалить'));
-    const dialog = await body.findByRole('dialog', { name: 'Удалить suite?' });
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Удалить' }));
-    await expect(body.findByText('Suite удалён')).resolves.toBeVisible();
+    await userEvent.click(await body.findByText('Архивировать'));
+    const dialog = await body.findByRole('dialog', { name: 'Архивировать suite?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Архивировать' }));
+    await expect(body.findByText('Suite архивирован')).resolves.toBeVisible();
     await expect(args.onSelect).toHaveBeenCalledWith(undefined);
   },
 };
-export const DeleteNonEmpty: Story = {
+export const ArchivePreviewError: Story = {
   parameters: {
     msw: [
       ...handlers,
-      graphql.mutation('DeleteSuite', () =>
+      graphql.query('SuiteArchivePreview', () =>
         HttpResponse.json({
           errors: [
             {
-              message: 'Suite must be empty before deletion',
-              extensions: { code: 'SUITE_NOT_EMPTY' },
+              message: 'Unavailable',
             },
           ],
         }),
@@ -108,12 +119,8 @@ export const DeleteNonEmpty: Story = {
     await userEvent.click(
       canvas.getByRole('button', { name: 'Действия для suite Аутентификация' }),
     );
-    await userEvent.click(await body.findByText('Удалить'));
-    const dialog = await body.findByRole('dialog', { name: 'Удалить suite?' });
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Удалить' }));
-    await expect(
-      body.findByText('Suite можно удалить только если в нём нет тестов и дочерних suites.'),
-    ).resolves.toBeVisible();
+    await userEvent.click(await body.findByText('Архивировать'));
+    await expect(body.findByText('Unavailable')).resolves.toBeVisible();
   },
 };
 export const ActionsDisabled: Story = {
@@ -125,7 +132,44 @@ export const ActionsDisabled: Story = {
       canvas.getByRole('button', { name: 'Действия для suite Аутентификация' }),
     );
     expect(await body.findByText('Переименовать')).toHaveAttribute('aria-disabled', 'true');
-    expect(await body.findByText('Удалить')).toHaveAttribute('aria-disabled', 'true');
+    expect(await body.findByText('Архивировать')).toHaveAttribute('aria-disabled', 'true');
+  },
+};
+export const RestoreArchived: Story = {
+  args: { includeArchived: true },
+  parameters: {
+    msw: [
+      graphql.query('SuiteTree', () =>
+        HttpResponse.json({
+          data: {
+            suiteTree: [
+              {
+                id: 'suite-1',
+                projectId: 'project-1',
+                parentId: null,
+                title: 'Архивная suite',
+                description: null,
+                position: 0,
+                createdAt: '2026-08-20T00:00:00Z',
+                updatedAt: '2026-08-20T00:00:00Z',
+                archivedAt: '2026-08-21T00:00:00Z',
+                children: [],
+              },
+            ],
+          },
+        }),
+      ),
+      restoreHandler,
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Действия для suite Архивная suite' }),
+    );
+    await userEvent.click(await body.findByText('Восстановить'));
+    await expect(body.findByText('Suite восстановлен')).resolves.toBeVisible();
   },
 };
 export const Error: Story = {

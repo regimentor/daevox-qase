@@ -17,6 +17,7 @@ export function TestCaseTable({
   onPageChange,
   onOpen,
   onArchive,
+  onRestore,
   emptyText = 'Тест-кейсов пока нет',
 }: {
   data: readonly TestCaseFieldsFragment[];
@@ -29,6 +30,7 @@ export function TestCaseTable({
   onPageChange(page: number, pageSize: number): void;
   onOpen(item: TestCaseFieldsFragment): void;
   onArchive(item: TestCaseFieldsFragment): void;
+  onRestore(item: TestCaseFieldsFragment): void;
   emptyText?: string;
 }) {
   const tableRegion = useRef<HTMLDivElement>(null);
@@ -136,16 +138,14 @@ export function TestCaseTable({
                 menu={{
                   items: [
                     { key: 'open', label: 'Открыть' },
-                    {
-                      key: 'archive',
-                      label: 'Архивировать',
-                      danger: true,
-                      disabled: Boolean(item.archivedAt),
-                    },
+                    item.archivedAt
+                      ? { key: 'restore', label: 'Восстановить' }
+                      : { key: 'archive', label: 'Архивировать', danger: true },
                   ],
                   onClick: ({ key, domEvent }) => {
                     domEvent.stopPropagation();
                     if (key === 'archive') onArchive(item);
+                    else if (key === 'restore') onRestore(item);
                     else onOpen(item);
                   },
                 }}

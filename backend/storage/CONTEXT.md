@@ -24,6 +24,10 @@
 
 The baseline schema supports tenant-scoped workspaces/projects, atomic case numbering, immutable run snapshots, append-only result history, and the object-deletion outbox used by the API's attachment cleanup command. Database constraints and triggers are part of the behavior, not incidental implementation details.
 
+`TestPlanSourceSuite` stores a plan's selected source suites. `TestPlanCaseSource` records source-suite provenance independently from the `manual` flag on `TestPlanCase`; archived plan-case links remain available for active/archived counts without changing run snapshots. Plan-case positions remain globally unique across active and archived links, so new links use a position above the global maximum and reordering reuses only active position slots.
+
+`ArchiveOperation` groups the soft-archived suite subtree or case and is referenced by archived repository objects. Restoring a suite restores the objects from its operation and moves the root to the end of its sibling list; it does not recreate deleted plan/source links.
+
 ## Seed and local infrastructure
 
 The seed is idempotent and creates demo users, workspace/project data, suites, cases, a plan, an environment, and a draft run with snapshots. It requires `SEED_DEMO_PASSWORD` to meet the documented minimum; production seeding additionally requires explicit opt-in.
