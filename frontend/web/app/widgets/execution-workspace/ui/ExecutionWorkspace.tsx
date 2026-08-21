@@ -193,12 +193,40 @@ export function ExecutionWorkspace({
             ]}
           />
           <section>
+            <Typography.Title level={3}>Метаданные Suite</Typography.Title>
+            {current.suiteMetadata.length ? (
+              current.suiteMetadata.map((suite) => (
+                <Card
+                  size="small"
+                  key={`${suite.suiteId}-${suite.position}`}
+                  style={{ marginBottom: 8 }}
+                >
+                  <Typography.Text strong>{suite.suiteTitle}</Typography.Text>
+                  <div style={{ marginTop: 8 }}>
+                    <strong>Предусловия:</strong>{' '}
+                    <span className="plain-text">{suite.preconditions || '—'}</span>
+                  </div>
+                  <div>
+                    <strong>Постусловия:</strong>{' '}
+                    <span className="plain-text">{suite.postconditions || '—'}</span>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <div className="plain-text">—</div>
+            )}
+          </section>
+          <section>
             <Typography.Title level={3}>Описание</Typography.Title>
             <div className="plain-text">{current.description || '—'}</div>
           </section>
           <section>
             <Typography.Title level={3}>Предусловия</Typography.Title>
             <div className="plain-text">{current.preconditions || '—'}</div>
+          </section>
+          <section>
+            <Typography.Title level={3}>Постусловия</Typography.Title>
+            <div className="plain-text">{current.postconditions || '—'}</div>
           </section>
           <Typography.Title level={3}>Шаги</Typography.Title>
           {current.steps.map((step) => (

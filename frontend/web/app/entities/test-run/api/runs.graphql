@@ -30,6 +30,13 @@ fragment RunCaseFields on TestRunCase {
     createdAt
     updatedAt
   }
+  suiteMetadata {
+    suiteId
+    suiteTitle
+    preconditions
+    postconditions
+    position
+  }
 }
 fragment RunFields on TestRun {
   id

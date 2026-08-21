@@ -48,6 +48,8 @@ fragment SuiteFieldsBase on TestSuite {
   parentId
   title
   description
+  preconditions
+  postconditions
   position
   createdAt
   updatedAt
@@ -275,19 +277,41 @@ query Tags($projectId: UUID!) {
     ...TagFields
   }
 }
-mutation CreateSuite($projectId: UUID!, $title: String!, $parentId: UUID, $position: Int) {
-  createTestSuite(projectId: $projectId, title: $title, parentId: $parentId, position: $position) {
+mutation CreateSuite(
+  $projectId: UUID!
+  $title: String!
+  $parentId: UUID
+  $description: String
+  $preconditions: String
+  $postconditions: String
+  $position: Int
+) {
+  createTestSuite(
+    projectId: $projectId
+    title: $title
+    parentId: $parentId
+    description: $description
+    preconditions: $preconditions
+    postconditions: $postconditions
+    position: $position
+  ) {
     id
     title
     parentId
     position
+    description
+    preconditions
+    postconditions
   }
 }
-mutation UpdateSuite($id: UUID!, $title: String!) {
-  updateTestSuite(id: $id, input: { title: $title }) {
+mutation UpdateSuite($id: UUID!, $input: UpdateTestSuiteInput!) {
+  updateTestSuite(id: $id, input: $input) {
     id
     title
     parentId
+    description
+    preconditions
+    postconditions
   }
 }
 mutation ArchiveSuite($id: UUID!) {

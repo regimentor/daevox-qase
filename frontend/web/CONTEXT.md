@@ -29,6 +29,7 @@ Stories are application-level compositions for boundary checking even when coloc
 - The API remains the authority for authentication, authorization, tenant isolation, and persistence. Client route protection improves UX but cannot replace server checks.
 - The repository supports an archive mode for suites and cases. Active views hide archived objects by default; archive actions show an API impact preview, and restore actions do not assume that old plan/source links are restored.
 - Plan editing supports multiple source suites and manual case provenance. The source-suite selector uses the active suite tree, while active and archived case counts are shown separately on plan list/detail views. Saving source changes also persists the displayed case order and reports synchronization counts from the API.
+- Suite authoring supports nullable plain-text preconditions and postconditions. Repository editing shows the selected Suite's own metadata, while run execution renders the immutable ordered Suite metadata snapshot separately from the Test Case pre/postconditions.
 - Keep attachment upload/download flows aligned with the API's presigned object-storage contract; file bytes should not be routed through GraphQL.
 
 ## Data and routing

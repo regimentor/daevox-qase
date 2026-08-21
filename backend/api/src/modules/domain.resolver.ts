@@ -247,9 +247,20 @@ export class DomainResolver {
     @Args('parentId') parentId: string | null | undefined,
     @Args('title') title: string,
     @Args('description') description?: string | null,
+    @Args('preconditions') preconditions?: string | null,
+    @Args('postconditions') postconditions?: string | null,
     @Args('position') position?: number | null,
   ) {
-    return this.suites.create(user.id, projectId, parentId, title, description, position);
+    return this.suites.create(
+      user.id,
+      projectId,
+      parentId,
+      title,
+      description,
+      preconditions,
+      postconditions,
+      position,
+    );
   }
   @Mutation() public updateTestSuite(
     @CurrentUser() user: AuthenticatedUser,

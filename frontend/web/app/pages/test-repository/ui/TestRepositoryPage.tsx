@@ -6,7 +6,7 @@ import {
   SearchOutlined,
 } from '@ant-design/icons';
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
-import { App, Button, Checkbox, Input, Select, Space, Tag } from 'antd';
+import { App, Button, Card, Checkbox, Form, Input, Select, Space, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useProjectContext } from '@/entities/project';
@@ -19,14 +19,39 @@ import {
   RestoreTestCaseDocument,
   TestCaseArchivePreviewDocument,
   SortDirection,
+  SuiteTreeDocument,
   TestCasesDocument,
   TestCaseSortField,
+  UpdateSuiteDocument,
   type TestCaseFieldsFragment,
 } from '@/shared/api/graphql';
 import { ErrorState, labels, PageHeader } from '@/shared/ui';
 import { parseRepositoryFilters, serializeRepositoryFilters } from '@/shared/lib/url';
 import { toFrontendError } from '@/shared/lib/errors';
 import { routes } from '@/shared/routes';
+
+type SuiteMetadataNode = {
+  id: string;
+  title: string;
+  description?: string | null;
+  archivedAt?: string | null;
+  preconditions?: string | null;
+  postconditions?: string | null;
+  children?: readonly SuiteMetadataNode[];
+};
+
+function findSuite(
+  suites: readonly SuiteMetadataNode[],
+  id: string | undefined,
+): SuiteMetadataNode | undefined {
+  if (!id) return undefined;
+  for (const suite of suites) {
+    if (suite.id === id) return suite;
+    const nested = findSuite(suite.children ?? [], id);
+    if (nested) return nested;
+  }
+  return undefined;
+}
 
 export function TestRepositoryPage() {
   const { project, workspace, readOnly } = useProjectContext();
@@ -38,6 +63,7 @@ export function TestRepositoryPage() {
   const [selected, setSelected] = useState<React.Key[]>([]);
   const [drawerCase, setDrawerCase] = useState<TestCaseFieldsFragment | 'new'>();
   const [createRunOpen, setCreateRunOpen] = useState(false);
+  const [suiteForm] = Form.useForm<{ preconditions?: string; postconditions?: string }>();
   useEffect(() => setSearch(filters.search), [filters.search]);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -66,6 +92,22 @@ export function TestRepositoryPage() {
       page: { limit: filters.pageSize, offset: (filters.page - 1) * filters.pageSize },
     },
   });
+  const suiteQuery = useQuery(SuiteTreeDocument, {
+    variables: { projectId: project.id, includeArchived: filters.includeArchived },
+  });
+  const selectedSuite = findSuite(
+    (suiteQuery.data?.suiteTree ?? []) as readonly SuiteMetadataNode[],
+    filters.suiteId,
+  );
+  const [updateSuite, updateSuiteState] = useMutation(UpdateSuiteDocument, {
+    refetchQueries: [SuiteTreeDocument],
+  });
+  useEffect(() => {
+    suiteForm.setFieldsValue({
+      preconditions: selectedSuite?.preconditions ?? '',
+      postconditions: selectedSuite?.postconditions ?? '',
+    });
+  }, [selectedSuite, suiteForm]);
   const [archive] = useMutation(ArchiveTestCaseDocument, { refetchQueries: [TestCasesDocument] });
   const [restore] = useMutation(RestoreTestCaseDocument, { refetchQueries: [TestCasesDocument] });
   const [preview] = useLazyQuery(TestCaseArchivePreviewDocument);
@@ -97,6 +139,25 @@ export function TestRepositoryPage() {
     try {
       await restore({ variables: { id: item.id } });
       void message.success('Тест-кейс восстановлен');
+    } catch (error) {
+      void message.error(toFrontendError(error).message);
+    }
+  };
+  const saveSuiteMetadata = async (values: { preconditions?: string; postconditions?: string }) => {
+    if (!selectedSuite) return;
+    try {
+      await updateSuite({
+        variables: {
+          id: selectedSuite.id,
+          input: {
+            title: selectedSuite.title,
+            description: selectedSuite.description ?? null,
+            preconditions: values.preconditions?.trim() || null,
+            postconditions: values.postconditions?.trim() || null,
+          },
+        },
+      });
+      void message.success('Метаданные suite сохранены');
     } catch (error) {
       void message.error(toFrontendError(error).message);
     }
@@ -229,6 +290,34 @@ export function TestRepositoryPage() {
               Сбросить
             </Button>
           </div>
+          {selectedSuite && !selectedSuite.archivedAt && (
+            <Card
+              size="small"
+              className="suite-metadata-editor"
+              title={
+                <Typography.Text strong>Метаданные suite: {selectedSuite.title}</Typography.Text>
+              }
+            >
+              <Form
+                form={suiteForm}
+                layout="vertical"
+                onFinish={(values) => void saveSuiteMetadata(values)}
+                disabled={readOnly || updateSuiteState.loading}
+              >
+                <Space align="start" style={{ display: 'flex' }} wrap>
+                  <Form.Item label="Предусловия" name="preconditions" style={{ minWidth: 280 }}>
+                    <Input.TextArea rows={3} placeholder="Общие условия перед кейсами suite" />
+                  </Form.Item>
+                  <Form.Item label="Постусловия" name="postconditions" style={{ minWidth: 280 }}>
+                    <Input.TextArea rows={3} placeholder="Общие условия после кейсов suite" />
+                  </Form.Item>
+                  <Button type="primary" htmlType="submit" loading={updateSuiteState.loading}>
+                    Сохранить
+                  </Button>
+                </Space>
+              </Form>
+            </Card>
+          )}
           {active.some(([, label]) => label) && (
             <Space wrap className="active-filters">
               <FilterOutlined />

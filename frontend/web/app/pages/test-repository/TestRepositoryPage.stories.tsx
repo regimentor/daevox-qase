@@ -33,6 +33,8 @@ const suite = {
   parentId: null,
   title: 'Аутентификация',
   description: null,
+  preconditions: 'Пользователь активен',
+  postconditions: 'Сессия закрыта',
   position: 0,
   createdAt: now,
   updatedAt: now,
@@ -115,6 +117,16 @@ const handlers = [
           createdAt: now,
           updatedAt: now,
           cases: [],
+        },
+      },
+    }),
+  ),
+  graphql.mutation('UpdateSuite', ({ variables }) =>
+    HttpResponse.json({
+      data: {
+        updateTestSuite: {
+          ...suite,
+          ...(variables.input as Record<string, unknown>),
         },
       },
     }),
@@ -217,6 +229,21 @@ export const EmptyReadOnly: Story = {
     const canvas = within(canvasElement);
     expect(await canvas.findByText('Тест-кейсов пока нет')).toBeVisible();
     expect(canvas.getByRole('button', { name: /Создать test case/ })).toBeDisabled();
+  },
+};
+
+export const EditSelectedSuiteMetadata: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByText('Аутентификация'));
+    const preconditions = await canvas.findByRole('textbox', { name: 'Предусловия' });
+    const postconditions = canvas.getByRole('textbox', { name: 'Постусловия' });
+    await userEvent.clear(preconditions);
+    await userEvent.type(preconditions, 'Новое условие');
+    await userEvent.clear(postconditions);
+    await userEvent.type(postconditions, 'Новое завершение');
+    await userEvent.click(canvas.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(canvas.getByText('Метаданные suite: Аутентификация')).toBeVisible());
   },
 };
 

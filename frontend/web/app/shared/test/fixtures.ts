@@ -85,4 +85,13 @@ export const runCaseFixture: RunCaseFieldsFragment = {
       updatedAt: testCaseFixture.updatedAt,
     },
   ],
+  suiteMetadata: [
+    {
+      suiteId: 'suite-1',
+      suiteTitle: 'Аутентификация',
+      preconditions: null,
+      postconditions: null,
+      position: 0,
+    },
+  ],
 };

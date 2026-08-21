@@ -26,6 +26,9 @@ type SuiteNode = {
   id: string;
   parentId: string | null;
   title: string;
+  description?: string | null;
+  preconditions?: string | null;
+  postconditions?: string | null;
   archivedAt?: string | null;
   children?: readonly SuiteNode[];
 };
@@ -117,7 +120,12 @@ export function SuiteTree({
   const [parentId, setParentId] = useState<string | null>();
   const [renaming, setRenaming] = useState<SuiteNode>();
   const [archiving, setArchiving] = useState<ArchiveConfirmation>();
-  const [form] = Form.useForm<{ title: string }>();
+  const [form] = Form.useForm<{
+    title: string;
+    description?: string;
+    preconditions?: string;
+    postconditions?: string;
+  }>();
   const [renameForm] = Form.useForm<{ title: string }>();
   const query = useQuery(SuiteTreeDocument, { variables: { projectId, includeArchived } });
   const [preview] = useLazyQuery(SuiteArchivePreviewDocument);
@@ -176,10 +184,23 @@ export function SuiteTree({
   if (query.loading && !query.data) return <PageSkeleton rows={8} />;
   if (query.error) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
 
-  const createSuite = async ({ title }: { title: string }) => {
+  const createSuite = async (values: {
+    title: string;
+    description?: string;
+    preconditions?: string;
+    postconditions?: string;
+  }) => {
     try {
       await create({
-        variables: { projectId, title: title.trim(), parentId: parentId || null, position: null },
+        variables: {
+          projectId,
+          title: values.title.trim(),
+          parentId: parentId || null,
+          description: values.description?.trim() || null,
+          preconditions: values.preconditions?.trim() || null,
+          postconditions: values.postconditions?.trim() || null,
+          position: null,
+        },
       });
       setParentId(undefined);
       form.resetFields();
@@ -191,7 +212,17 @@ export function SuiteTree({
   const renameSuite = async ({ title }: { title: string }) => {
     if (!renaming) return;
     try {
-      await update({ variables: { id: renaming.id, title: title.trim() } });
+      await update({
+        variables: {
+          id: renaming.id,
+          input: {
+            title: title.trim(),
+            description: renaming.description ?? null,
+            preconditions: renaming.preconditions ?? null,
+            postconditions: renaming.postconditions ?? null,
+          },
+        },
+      });
       await query.refetch();
       setRenaming(undefined);
       renameForm.resetFields();
@@ -275,6 +306,15 @@ export function SuiteTree({
         <Form form={form} layout="vertical" onFinish={createSuite} disabled={createState.loading}>
           <Form.Item label="Название" name="title" rules={[{ required: true, whitespace: true }]}>
             <Input autoFocus />
+          </Form.Item>
+          <Form.Item label="Описание" name="description">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item label="Предусловия" name="preconditions">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item label="Постусловия" name="postconditions">
+            <Input.TextArea rows={3} />
           </Form.Item>
           <Button type="primary" htmlType="submit" loading={createState.loading}>
             Создать

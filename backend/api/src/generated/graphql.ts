@@ -100,6 +100,8 @@ export interface UpdateProjectInput {
 export interface UpdateTestSuiteInput {
     title?: Nullable<string>;
     description?: Nullable<string>;
+    preconditions?: Nullable<string>;
+    postconditions?: Nullable<string>;
 }
 
 export interface TestStepInput {
@@ -277,6 +279,8 @@ export interface TestSuite {
     parentId?: Nullable<UUID>;
     title: string;
     description?: Nullable<string>;
+    preconditions?: Nullable<string>;
+    postconditions?: Nullable<string>;
     position: number;
     children: TestSuite[];
     archivedAt?: Nullable<DateTime>;
@@ -422,6 +426,15 @@ export interface TestRunCaseStep {
     updatedAt: DateTime;
 }
 
+export interface TestRunCaseSuiteMetadata {
+    __typename?: 'TestRunCaseSuiteMetadata';
+    suiteId: UUID;
+    suiteTitle: string;
+    preconditions?: Nullable<string>;
+    postconditions?: Nullable<string>;
+    position: number;
+}
+
 export interface TestRunCase {
     __typename?: 'TestRunCase';
     id: UUID;
@@ -443,6 +456,7 @@ export interface TestRunCase {
     position: number;
     currentStatus: CurrentRunCaseStatus;
     steps: TestRunCaseStep[];
+    suiteMetadata: TestRunCaseSuiteMetadata[];
     createdAt: DateTime;
     updatedAt: DateTime;
 }
@@ -595,7 +609,7 @@ export interface IMutation {
     updateProject(id: UUID, input: UpdateProjectInput): Project | Promise<Project>;
     archiveProject(id: UUID): Project | Promise<Project>;
     deleteProject(id: UUID): boolean | Promise<boolean>;
-    createTestSuite(projectId: UUID, title: string, parentId?: Nullable<UUID>, description?: Nullable<string>, position?: Nullable<number>): TestSuite | Promise<TestSuite>;
+    createTestSuite(projectId: UUID, title: string, parentId?: Nullable<UUID>, description?: Nullable<string>, preconditions?: Nullable<string>, postconditions?: Nullable<string>, position?: Nullable<number>): TestSuite | Promise<TestSuite>;
     updateTestSuite(id: UUID, input: UpdateTestSuiteInput): TestSuite | Promise<TestSuite>;
     moveTestSuite(suiteId: UUID, position: number, parentId?: Nullable<UUID>): TestSuite | Promise<TestSuite>;
     archiveTestSuite(id: UUID): TestSuite | Promise<TestSuite>;

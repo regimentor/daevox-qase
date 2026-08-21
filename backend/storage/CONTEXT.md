@@ -22,7 +22,7 @@
 
 ## Data guarantees
 
-The baseline schema supports tenant-scoped workspaces/projects, atomic case numbering, immutable run snapshots, append-only result history, and the object-deletion outbox used by the API's attachment cleanup command. Database constraints and triggers are part of the behavior, not incidental implementation details.
+The baseline schema supports tenant-scoped workspaces/projects, atomic case numbering, immutable run snapshots (including ordered Suite metadata per run case), append-only result history, and the object-deletion outbox used by the API's attachment cleanup command. Database constraints and triggers are part of the behavior, not incidental implementation details.
 
 `TestPlanSourceSuite` stores a plan's selected source suites. `TestPlanCaseSource` records source-suite provenance independently from the `manual` flag on `TestPlanCase`; archived plan-case links remain available for active/archived counts without changing run snapshots. Plan-case positions remain globally unique across active and archived links, so new links use a position above the global maximum and reordering reuses only active position slots.
 

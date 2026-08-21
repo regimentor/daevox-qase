@@ -174,6 +174,8 @@ type TestSuite {
   parentId: UUID
   title: String!
   description: String
+  preconditions: String
+  postconditions: String
   position: Int!
   children: [TestSuite!]!
   archivedAt: DateTime
@@ -184,6 +186,8 @@ type TestSuite {
 input UpdateTestSuiteInput {
   title: String
   description: String
+  preconditions: String
+  postconditions: String
 }
 
 "An ordered editable source test step."
@@ -376,6 +380,14 @@ type TestRunCaseStep {
   createdAt: DateTime!
   updatedAt: DateTime!
 }
+"Immutable metadata for one Suite in a run-case's ancestor chain."
+type TestRunCaseSuiteMetadata {
+  suiteId: UUID!
+  suiteTitle: String!
+  preconditions: String
+  postconditions: String
+  position: Int!
+}
 "An immutable source-case snapshot; only assignment can change."
 type TestRunCase {
   id: UUID!
@@ -397,6 +409,7 @@ type TestRunCase {
   position: Int!
   currentStatus: CurrentRunCaseStatus!
   steps: [TestRunCaseStep!]!
+  suiteMetadata: [TestRunCaseSuiteMetadata!]!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -619,6 +632,8 @@ type Mutation {
     title: String!
     parentId: UUID
     description: String
+    preconditions: String
+    postconditions: String
     position: Int
   ): TestSuite!
   "Update suite metadata."

@@ -13,10 +13,39 @@ const runInclude = {
     orderBy: [{ position: 'asc' as const }, { id: 'asc' as const }],
     include: {
       steps: { orderBy: [{ position: 'asc' as const }, { id: 'asc' as const }] },
+      suiteMetadata: { orderBy: [{ position: 'asc' as const }, { id: 'asc' as const }] },
       results: { orderBy: [{ createdAt: 'desc' as const }, { id: 'desc' as const }], take: 1 },
     },
   },
 };
+
+type SuiteSnapshotSource = {
+  id: string;
+  parentId: string | null;
+  title: string;
+  preconditions: string | null;
+  postconditions: string | null;
+};
+
+function suiteChain(
+  suiteId: string,
+  suites: ReadonlyMap<string, SuiteSnapshotSource>,
+): SuiteSnapshotSource[] {
+  const chain: SuiteSnapshotSource[] = [];
+  const seen = new Set<string>();
+  let currentId: string | null = suiteId;
+  while (currentId) {
+    invariant(!seen.has(currentId), 'VALIDATION_ERROR', 'Request validation failed', {
+      suiteId: 'Suite hierarchy contains a cycle',
+    });
+    seen.add(currentId);
+    const suite = suites.get(currentId);
+    invariant(suite, 'RESOURCE_NOT_FOUND', 'Resource not found');
+    chain.push(suite);
+    currentId = suite.parentId;
+  }
+  return chain.toReversed();
+}
 
 function shapeRun<
   T extends {
@@ -56,6 +85,7 @@ export class RunsService {
       include: {
         testRun: { include: { project: { select: { code: true } } } },
         steps: { orderBy: [{ position: 'asc' }, { id: 'asc' }] },
+        suiteMetadata: { orderBy: [{ position: 'asc' }, { id: 'asc' }] },
         results: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1 },
       },
     });
@@ -137,6 +167,18 @@ export class RunsService {
           { testCaseIds: 'Cases must exist, be active, and belong to the project' },
         );
         const byId = new Map(cases.map((testCase) => [testCase.id, testCase]));
+        await transaction.$queryRaw`SELECT id FROM test_suites WHERE project_id = ${input.projectId}::uuid FOR SHARE`;
+        const suiteRows = await transaction.testSuite.findMany({
+          where: { projectId: input.projectId },
+          select: {
+            id: true,
+            parentId: true,
+            title: true,
+            preconditions: true,
+            postconditions: true,
+          },
+        });
+        const suites = new Map(suiteRows.map((suite) => [suite.id, suite]));
         const run = await transaction.testRun.create({
           data: {
             projectId: input.projectId,
@@ -166,6 +208,15 @@ export class RunsService {
               automationStatus: source.automationStatus,
               estimatedDurationSeconds: source.estimatedDurationSeconds,
               position,
+              suiteMetadata: {
+                create: suiteChain(source.suiteId, suites).map((suite, suitePosition) => ({
+                  suiteId: suite.id,
+                  suiteTitle: suite.title,
+                  preconditions: suite.preconditions,
+                  postconditions: suite.postconditions,
+                  position: suitePosition,
+                })),
+              },
             },
           });
           if (source.steps.length) {

@@ -169,6 +169,8 @@ model TestSuite {
   parentId    String?      @map("parent_id") @db.Uuid
   title       String       @db.VarChar(500)
   description String?
+  preconditions String?
+  postconditions String?
   position    Int
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -425,6 +427,7 @@ model TestRunCase {
   sourceTestCase           TestCase           @relation(fields: [sourceTestCaseId, projectId], references: [id, projectId], onDelete: Cascade)
   assignee                 User?              @relation("RunCaseAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   steps                    TestRunCaseStep[]
+  suiteMetadata            TestRunCaseSuiteMetadata[]
   results                  TestResult[]
   stepResults              TestStepResult[]
 
@@ -433,6 +436,24 @@ model TestRunCase {
   @@index([testRunId])
   @@index([assigneeId])
   @@map("test_run_cases")
+}
+
+model TestRunCaseSuiteMetadata {
+  id             String      @id @default(uuid()) @db.Uuid
+  testRunCaseId  String      @map("test_run_case_id") @db.Uuid
+  suiteId        String      @map("suite_id") @db.Uuid
+  suiteTitle     String      @map("suite_title") @db.VarChar(500)
+  preconditions  String?
+  postconditions String?
+  position       Int
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  testRunCase    TestRunCase @relation(fields: [testRunCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([id, testRunCaseId])
+  @@unique([testRunCaseId, position])
+  @@index([testRunCaseId])
+  @@map("test_run_case_suite_metadata")
 }
 
 model TestRunCaseStep {

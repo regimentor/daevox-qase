@@ -13,6 +13,12 @@ type SuiteNode = Awaited<ReturnType<PrismaService['client']['testSuite']['findFi
   children: SuiteNode[];
 };
 
+function suiteText(value: string | null | undefined, field: string): string | null | undefined {
+  if (value === undefined || value === null || value.trim() === '')
+    return value === undefined ? undefined : null;
+  return optionalText(value, field);
+}
+
 @Injectable()
 export class SuitesService {
   public constructor(
@@ -61,6 +67,8 @@ export class SuitesService {
     parentId: string | null | undefined,
     titleInput: string,
     description: string | null | undefined,
+    preconditions: string | null | undefined,
+    postconditions: string | null | undefined,
     requestedPosition: number | null | undefined,
   ) {
     return withTransactionRetry(() =>
@@ -87,6 +95,8 @@ export class SuitesService {
               parentId: parentId ?? null,
               title: text(titleInput, 'title', limits.title),
               description: optionalText(description, 'description'),
+              preconditions: suiteText(preconditions, 'preconditions'),
+              postconditions: suiteText(postconditions, 'postconditions'),
               position,
             },
           });
@@ -105,6 +115,10 @@ export class SuitesService {
       data.title = text(input.title, 'title', limits.title);
     if (input.description !== undefined)
       data.description = optionalText(input.description, 'description');
+    if (input.preconditions !== undefined)
+      data.preconditions = suiteText(input.preconditions, 'preconditions');
+    if (input.postconditions !== undefined)
+      data.postconditions = suiteText(input.postconditions, 'postconditions');
     return this.prisma.client.testSuite.update({ where: { id }, data });
   }
 

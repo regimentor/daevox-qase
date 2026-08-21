@@ -177,6 +177,25 @@ describe('Daevox MVP GraphQL walkthrough', () => {
         member.accessToken,
       )
     ).createTestSuite;
+    await graphql(
+      `
+        mutation ($id: UUID!, $input: UpdateTestSuiteInput!) {
+          updateTestSuite(id: $id, input: $input) {
+            id
+            preconditions
+            postconditions
+          }
+        }
+      `,
+      {
+        id: suite.id,
+        input: {
+          preconditions: 'User has an active account',
+          postconditions: 'Session is closed',
+        },
+      },
+      member.accessToken,
+    );
     tag = (
       await graphql<{ createTag: Identifier }>(
         'mutation($projectId:UUID!){createTag(projectId:$projectId,name:"Smoke"){id}}',
@@ -289,6 +308,55 @@ describe('Daevox MVP GraphQL walkthrough', () => {
     expect(unchanged).toEqual({
       title: snapshot.title,
       steps: [{ action: snapshot.steps[0]?.action }],
+    });
+    const immutableSuiteSnapshot = (
+      await graphql<{
+        testRun: {
+          cases: Array<{
+            suiteMetadata: Array<{
+              suiteId: string;
+              suiteTitle: string;
+              preconditions: string | null;
+              postconditions: string | null;
+            }>;
+          }>;
+        };
+      }>(
+        'query($id:UUID!){testRun(id:$id){cases{suiteMetadata{suiteId suiteTitle preconditions postconditions}}}}',
+        { id: run.id },
+        member.accessToken,
+      )
+    ).testRun.cases[0]?.suiteMetadata[0];
+    expect(immutableSuiteSnapshot).toMatchObject({
+      suiteId: suite.id,
+      suiteTitle: 'Authentication',
+      preconditions: 'User has an active account',
+      postconditions: 'Session is closed',
+    });
+    await graphql(
+      'mutation($id:UUID!,$input:UpdateTestSuiteInput!){updateTestSuite(id:$id,input:$input){id}}',
+      {
+        id: suite.id,
+        input: { title: 'Authentication renamed', preconditions: 'Changed later' },
+      },
+      member.accessToken,
+    );
+    const stillImmutable = (
+      await graphql<{
+        testRun: {
+          cases: Array<{
+            suiteMetadata: Array<{ suiteTitle: string; preconditions: string | null }>;
+          }>;
+        };
+      }>(
+        'query($id:UUID!){testRun(id:$id){cases{suiteMetadata{suiteTitle preconditions}}}}',
+        { id: run.id },
+        member.accessToken,
+      )
+    ).testRun.cases[0]?.suiteMetadata[0];
+    expect(stillImmutable).toEqual({
+      suiteTitle: 'Authentication',
+      preconditions: 'User has an active account',
     });
 
     await graphql(
@@ -413,6 +481,163 @@ describe('Daevox MVP GraphQL walkthrough', () => {
     expect(foreign.body.errors[0].extensions.stacktrace).toBeUndefined();
   });
 
+  it('snapshots nested suite metadata for manual and plan runs', async () => {
+    const chainRoot = (
+      await graphql<{ createTestSuite: Identifier }>(
+        `
+          mutation ($projectId: UUID!) {
+            createTestSuite(
+              projectId: $projectId
+              title: "Authentication chain"
+              preconditions: "Account exists"
+              postconditions: "Account remains active"
+            ) {
+              id
+            }
+          }
+        `,
+        { projectId: project.id },
+        member.accessToken,
+      )
+    ).createTestSuite;
+    const childSuite = (
+      await graphql<{ createTestSuite: Identifier }>(
+        `
+          mutation ($projectId: UUID!, $parentId: UUID!) {
+            createTestSuite(
+              projectId: $projectId
+              parentId: $parentId
+              title: "Authentication details"
+              preconditions: "Browser is open"
+              postconditions: "Browser is closed"
+            ) {
+              id
+            }
+          }
+        `,
+        { projectId: project.id, parentId: chainRoot.id },
+        member.accessToken,
+      )
+    ).createTestSuite;
+    const childCase = (
+      await graphql<{ createTestCase: Identifier }>(
+        `
+          mutation ($input: CreateTestCaseInput!) {
+            createTestCase(input: $input) {
+              id
+            }
+          }
+        `,
+        {
+          input: {
+            projectId: project.id,
+            suiteId: childSuite.id,
+            title: 'Login details are preserved',
+            priority: 'MEDIUM',
+            severity: 'NORMAL',
+            type: 'FUNCTIONAL',
+            automationStatus: 'MANUAL',
+          },
+        },
+        member.accessToken,
+      )
+    ).createTestCase;
+    const manualRun = (
+      await graphql<{
+        createTestRun: {
+          id: string;
+          cases: Array<{
+            suiteMetadata: Array<{
+              suiteId: string;
+              suiteTitle: string;
+              preconditions: string | null;
+              postconditions: string | null;
+              position: number;
+            }>;
+          }>;
+        };
+      }>(
+        `
+          mutation ($input: CreateTestRunInput!) {
+            createTestRun(input: $input) {
+              id
+              cases {
+                suiteMetadata {
+                  suiteId
+                  suiteTitle
+                  preconditions
+                  postconditions
+                  position
+                }
+              }
+            }
+          }
+        `,
+        { input: { projectId: project.id, title: 'Nested manual', testCaseIds: [childCase.id] } },
+        member.accessToken,
+      )
+    ).createTestRun;
+    expect(manualRun.cases[0]?.suiteMetadata).toEqual([
+      {
+        suiteId: chainRoot.id,
+        suiteTitle: 'Authentication chain',
+        preconditions: 'Account exists',
+        postconditions: 'Account remains active',
+        position: 0,
+      },
+      {
+        suiteId: childSuite.id,
+        suiteTitle: 'Authentication details',
+        preconditions: 'Browser is open',
+        postconditions: 'Browser is closed',
+        position: 1,
+      },
+    ]);
+
+    const suitePlan = (
+      await graphql<{ createTestPlan: Identifier }>(
+        'mutation($projectId:UUID!,$sourceSuiteIds:[UUID!]){createTestPlan(projectId:$projectId,title:"Nested plan",testCaseIds:[],sourceSuiteIds:$sourceSuiteIds){id}}',
+        { projectId: project.id, sourceSuiteIds: [chainRoot.id] },
+        member.accessToken,
+      )
+    ).createTestPlan;
+    const planRun = (
+      await graphql<{
+        createTestRun: { cases: Array<{ suiteMetadata: Array<{ suiteId: string }> }> };
+      }>(
+        'mutation($input:CreateTestRunInput!){createTestRun(input:$input){cases{suiteMetadata{suiteId}}}}',
+        { input: { projectId: project.id, title: 'Nested plan run', testPlanId: suitePlan.id } },
+        member.accessToken,
+      )
+    ).createTestRun;
+    expect(planRun.cases).toHaveLength(1);
+    expect(planRun.cases[0]?.suiteMetadata[0]?.suiteId).toBe(chainRoot.id);
+    expect(planRun.cases[0]?.suiteMetadata.at(-1)?.suiteId).toBe(childSuite.id);
+    await graphql(
+      'mutation($id:UUID!,$input:UpdateTestSuiteInput!){updateTestSuite(id:$id,input:$input){id preconditions postconditions}}',
+      { id: childSuite.id, input: { preconditions: '', postconditions: '' } },
+      member.accessToken,
+    );
+    const cleared = (
+      await graphql<{ suite: { preconditions: string | null; postconditions: string | null } }>(
+        'query($id:UUID!){suite(id:$id){preconditions postconditions}}',
+        { id: childSuite.id },
+        member.accessToken,
+      )
+    ).suite;
+    expect(cleared).toEqual({ preconditions: null, postconditions: null });
+    const unchangedManualSnapshot = (
+      await graphql<{
+        testRun: { cases: Array<{ suiteMetadata: Array<{ preconditions: string | null }> }> };
+      }>(
+        'query($id:UUID!){testRun(id:$id){cases{suiteMetadata{preconditions}}}}',
+        { id: manualRun.id },
+        member.accessToken,
+      )
+    ).testRun.cases[0]?.suiteMetadata.at(-1);
+    expect(unchangedManualSnapshot?.preconditions).toBe('Browser is open');
+  });
+
   it('creates and synchronizes plans from source suites with archive-safe case membership', async () => {
     const sourceRoot = (
       await graphql<{ createTestSuite: Identifier }>(
@@ -510,8 +735,8 @@ describe('Daevox MVP GraphQL walkthrough', () => {
       member.accessToken,
     );
     expect(afterCreate.testPlan.testCases.map((item) => item.id)).toEqual([
-      childCase.id,
       secondCase.id,
+      childCase.id,
       testCase.id,
       newChildCase.id,
     ]);
