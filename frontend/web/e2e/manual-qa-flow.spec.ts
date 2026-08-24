@@ -152,15 +152,42 @@ test.describe.serial('critical manual QA flow against test API', () => {
     await context.close();
   });
 
-  test('session refresh after reload and logout cleanup', async ({ page }) => {
+  test('expired session refresh after API request and logout cleanup', async ({
+    context,
+    page,
+  }) => {
+    let refreshRequests = 0;
+    await context.route('**/graphql', async (route) => {
+      const request = route.request().postDataJSON() as { operationName?: string };
+      if (request.operationName === 'RefreshSession') refreshRequests += 1;
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        data?: { login?: { accessTokenExpiresAt?: string } };
+      };
+      if (request.operationName === 'Login' && body.data?.login) {
+        body.data.login.accessTokenExpiresAt = new Date(Date.now() - 1_000).toISOString();
+      }
+      await route.fulfill({ response, json: body });
+    });
     await login(page);
-    await page.goto(workspaceUrl);
-    await page.reload();
-    await expect(page).toHaveURL(workspaceUrl);
-    await page.goto(`${projectUrl}/dashboard`);
-    await page.getByRole('button', { name: 'Меню пользователя' }).click();
-    await page.getByText('Выйти').click();
-    await expect(page).toHaveURL(/\/login/);
-    expect(await page.evaluate(() => localStorage.getItem('daevox.session.refresh'))).toBeNull();
+    expect(refreshRequests).toBe(1);
+    await page.close();
+
+    refreshRequests = 0;
+    const firstTab = await context.newPage();
+    const secondTab = await context.newPage();
+    await Promise.all([firstTab.goto(workspaceUrl), secondTab.goto(workspaceUrl)]);
+    await expect(firstTab).toHaveURL(workspaceUrl);
+    await expect(secondTab).toHaveURL(workspaceUrl);
+    expect(refreshRequests).toBe(1);
+
+    await firstTab.goto(`${projectUrl}/dashboard`);
+    await firstTab.getByRole('button', { name: 'Меню пользователя' }).click();
+    await firstTab.getByText('Выйти').click();
+    await expect(firstTab).toHaveURL(/\/login/);
+    await expect(secondTab).toHaveURL(/\/login/);
+    expect(
+      await firstTab.evaluate(() => localStorage.getItem('daevox.session.refresh')),
+    ).toBeNull();
   });
 });

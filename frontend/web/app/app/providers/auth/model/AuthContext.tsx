@@ -11,10 +11,10 @@ import type { User } from '@/shared/api/graphql';
 import { LoginDocument, LogoutDocument, RegisterDocument } from '@/shared/api/graphql';
 import { sessionTokenStorage } from '@/shared/lib/storage';
 import {
-  accessTokenMemory,
   apolloClient,
   bootstrapSession,
   onSessionExpired,
+  sessionController,
 } from '@/app/providers/apollo';
 
 interface AuthContextValue {
@@ -31,24 +31,42 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<AuthContextValue['user']>(null);
   const [ready, setReady] = useState(false);
 
-  const clearSession = useCallback(async () => {
-    accessTokenMemory.clear();
-    sessionTokenStorage.clear();
+  const clearSession = useCallback(async (publish = true) => {
+    sessionController.clear(publish);
     setUser(null);
     await apolloClient.clearStore();
   }, []);
 
   useEffect(() => {
     let active = true;
-    void bootstrapSession().then((nextUser) => {
-      if (active) {
-        setUser(nextUser);
-        setReady(true);
-      }
-    });
-    const unsubscribe = onSessionExpired(() => void clearSession());
+    let restoring = false;
+    let restored = false;
+    const restore = () => {
+      if (restoring || restored) return;
+      restoring = true;
+      void bootstrapSession()
+        .then((nextUser) => {
+          restored = true;
+          if (active) {
+            setUser(nextUser);
+            setReady(true);
+          }
+        })
+        .catch(() => {
+          // Keep the app in recovery state while a retained session is temporarily unavailable.
+        })
+        .finally(() => {
+          restoring = false;
+        });
+    };
+    restore();
+    window.addEventListener('online', restore);
+    window.addEventListener('focus', restore);
+    const unsubscribe = onSessionExpired(() => void clearSession(false));
     return () => {
       active = false;
+      window.removeEventListener('online', restore);
+      window.removeEventListener('focus', restore);
       unsubscribe();
     };
   }, [clearSession]);
@@ -56,11 +74,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const acceptPayload = useCallback(
     (payload: {
       accessToken: string;
+      accessTokenExpiresAt: string;
       refreshToken: string;
       user: Pick<User, 'id' | 'email' | 'name'>;
     }) => {
-      accessTokenMemory.write(payload.accessToken);
-      sessionTokenStorage.writeRefreshToken(payload.refreshToken);
+      sessionController.accept(payload);
       setUser(payload.user);
     },
     [],
