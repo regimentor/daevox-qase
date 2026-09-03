@@ -211,7 +211,7 @@ export function TestCaseDrawer({
   return (
     <Drawer
       getContainer={false}
-      size={720}
+      width={720}
       open={open}
       onClose={requestClose}
       title={testCase ? `${testCase.displayId} · ${testCase.title}` : 'Новый тест-кейс'}

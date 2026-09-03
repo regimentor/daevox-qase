@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { graphql, HttpResponse } from 'msw';
-import { fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { TestCaseDrawer } from '@/features/test-case-edit';
 import { testCaseFixture } from '@/shared/test';
 const handlers = [
@@ -33,7 +33,12 @@ const meta = {
 } satisfies Meta<typeof TestCaseDrawer>;
 export default meta;
 type Story = StoryObj<typeof meta>;
-export const Preview: Story = {};
+export const Preview: Story = {
+  play: async ({ canvasElement }) => {
+    const drawer = canvasElement.querySelector<HTMLElement>('.ant-drawer-content-wrapper');
+    expect(drawer).toHaveStyle({ width: '720px' });
+  },
+};
 export const LongContent: Story = {
   args: { testCase: { ...testCaseFixture, description: 'Длинное описание\n'.repeat(30) } },
 };
