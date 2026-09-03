@@ -63,7 +63,7 @@ export function TestCaseTable({
           {
             title: 'ID',
             dataIndex: 'displayId',
-            width: 100,
+            width: 140,
             fixed: 'left',
             render: (value, item) => (
               <Button

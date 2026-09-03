@@ -41,6 +41,25 @@ export const ManyRows: Story = {
     total: 30,
   },
 };
+export const LongDisplayId: Story = {
+  args: {
+    data: [
+      {
+        ...testCaseFixture,
+        displayId: 'ONLINEREGWEB-13',
+        title: 'Проверка работоспособности выбора филиала',
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const displayId = canvas.getByText('ONLINEREGWEB-13');
+    const title = canvas.getByText('Проверка работоспособности выбора филиала');
+    expect(displayId.getBoundingClientRect().right).toBeLessThan(
+      title.getBoundingClientRect().left,
+    );
+  },
+};
 export const PermissionRestricted: Story = { args: { selectedKeys: [] } };
 export const ActionsAndArchivedRow: Story = {
   args: {
