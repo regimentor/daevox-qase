@@ -25,7 +25,7 @@ import {
   UpdateSuiteDocument,
   type TestCaseFieldsFragment,
 } from '@/shared/api/graphql';
-import { ErrorState, labels, PageHeader } from '@/shared/ui';
+import { ErrorState, labels, PageHeader, PersistentTextArea } from '@/shared/ui';
 import { parseRepositoryFilters, serializeRepositoryFilters } from '@/shared/lib/url';
 import { toFrontendError } from '@/shared/lib/errors';
 import { routes } from '@/shared/routes';
@@ -64,6 +64,7 @@ export function TestRepositoryPage() {
   const [drawerCase, setDrawerCase] = useState<TestCaseFieldsFragment | 'new'>();
   const [createRunOpen, setCreateRunOpen] = useState(false);
   const [suiteForm] = Form.useForm<{ preconditions?: string; postconditions?: string }>();
+  const suiteMetadataSizeKey = `daevox.repository.suite-metadata-height.${project.id}`;
   useEffect(() => setSearch(filters.search), [filters.search]);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -306,10 +307,18 @@ export function TestRepositoryPage() {
               >
                 <Space align="start" style={{ display: 'flex' }} wrap>
                   <Form.Item label="Предусловия" name="preconditions" style={{ minWidth: 280 }}>
-                    <Input.TextArea rows={3} placeholder="Общие условия перед кейсами suite" />
+                    <PersistentTextArea
+                      rows={3}
+                      storageKey={`${suiteMetadataSizeKey}.preconditions`}
+                      placeholder="Общие условия перед кейсами suite"
+                    />
                   </Form.Item>
                   <Form.Item label="Постусловия" name="postconditions" style={{ minWidth: 280 }}>
-                    <Input.TextArea rows={3} placeholder="Общие условия после кейсов suite" />
+                    <PersistentTextArea
+                      rows={3}
+                      storageKey={`${suiteMetadataSizeKey}.postconditions`}
+                      placeholder="Общие условия после кейсов suite"
+                    />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" loading={updateSuiteState.loading}>
                     Сохранить
