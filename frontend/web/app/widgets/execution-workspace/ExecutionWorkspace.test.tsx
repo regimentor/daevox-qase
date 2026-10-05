@@ -121,14 +121,14 @@ function mount(currentId = 'nested', onSelect: (id: string) => void = () => {}, 
     cache: new InMemoryCache(),
     link: new HttpLink({ uri: 'http://localhost/graphql' }),
   });
-  function Harness() {
+  function Harness({ items }: { items: RunCaseFieldsFragment[] }) {
     const [selected, setSelected] = useState(currentId);
     return (
       <ExecutionWorkspace
         workspaceId="workspace-1"
         runId="run-1"
         title="Smoke"
-        cases={runCases}
+        cases={items}
         currentId={selected}
         onSelect={(id) => {
           setSelected(id);
@@ -138,19 +138,84 @@ function mount(currentId = 'nested', onSelect: (id: string) => void = () => {}, 
       />
     );
   }
-  return render(
+  const view = (items: RunCaseFieldsFragment[]) => (
     <ApolloProvider client={client}>
       <App>
-        <Harness />
+        <Harness items={items} />
       </App>
-    </ApolloProvider>,
+    </ApolloProvider>
   );
+  const result = render(view(runCases));
+  return {
+    ...result,
+    updateCases: (items: RunCaseFieldsFragment[]) => result.rerender(view(items)),
+  };
 }
 
-it('shows snapshot suites, nested cases and ungrouped cases after the suites', () => {
+it('starts with every suite collapsed while displaying the selected case snapshot', () => {
+  mount();
+  const navigator = within(screen.getByRole('navigation', { name: 'Кейсы запуска' }));
+  expect(navigator.getAllByRole('button', { expanded: false })).toHaveLength(3);
+  expect(navigator.queryByRole('button', { name: /WEB-/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Смена пароля' })).toBeVisible();
+});
+
+it('shows subtree totals and status counts for collapsed suites, including ungrouped cases', async () => {
+  const user = userEvent.setup();
+  mount();
+  const navigator = within(screen.getByRole('navigation', { name: 'Кейсы запуска' }));
+  const summary = within(navigator.getByRole('group', { name: 'Статистика сьюта Авторизация' }));
+  expect(summary.getByText('Кейсов: 2')).toBeVisible();
+  expect(summary.getByLabelText('Не выполнен: 1')).toBeVisible();
+  expect(summary.getByLabelText('Пройден: 1')).toBeVisible();
+  expect(summary.getByLabelText('Пройден: 1')).toHaveTextContent(/^1$/);
+  expect(summary.getByLabelText('Пройден: 1')).toHaveAttribute('title', 'Пройден: 1');
+  expect(summary.getByLabelText('Провален: 0')).toBeVisible();
+  expect(summary.getByLabelText('Заблокирован: 0')).toBeVisible();
+  expect(summary.getByLabelText('Пропущен: 0')).toBeVisible();
+  const loose = within(navigator.getByRole('group', { name: 'Статистика сьюта Без сьюта' }));
+  expect(loose.getByText('Кейсов: 1')).toBeVisible();
+  expect(loose.getByLabelText('Не выполнен: 1')).toBeVisible();
+  await user.click(navigator.getByRole('button', { name: 'Авторизация' }));
+  const nested = within(navigator.getByRole('group', { name: 'Статистика сьюта Пароли' }));
+  expect(nested.getByText('Кейсов: 1')).toBeVisible();
+  expect(nested.getByLabelText('Не выполнен: 1')).toBeVisible();
+});
+
+it('keeps full suite statistics during filtering and updates them when a case result changes', async () => {
+  const user = userEvent.setup();
+  const view = mount();
+  const navigator = within(screen.getByRole('navigation', { name: 'Кейсы запуска' }));
+  await user.type(navigator.getByRole('textbox', { name: 'Поиск кейсов запуска' }), 'Вход');
+  const stats = () =>
+    within(navigator.getByRole('group', { name: 'Статистика сьюта Авторизация' }));
+  expect(navigator.getAllByRole('button', { name: /WEB-/ })).toHaveLength(1);
+  expect(stats().getByText('Кейсов: 2')).toBeVisible();
+  expect(stats().getByLabelText('Пройден: 1')).toBeVisible();
+  view.updateCases(
+    cases.map((item) =>
+      item.id === 'nested' ? { ...item, currentStatus: CurrentRunCaseStatus.Failed } : item,
+    ),
+  );
+  expect(stats().getByLabelText('Провален: 1')).toBeVisible();
+  expect(stats().getByLabelText('Не выполнен: 0')).toBeVisible();
+  expect(stats().getByLabelText('Пройден: 1')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Смена пароля' })).toBeVisible();
+});
+
+it('shows snapshot suites, nested cases and ungrouped cases after the suites', async () => {
+  const user = userEvent.setup();
   mount();
   const navigator = within(screen.getByRole('navigation', { name: 'Кейсы запуска' }));
   const roots = navigator.getByRole('list', { name: 'Сьюты запуска' });
+  await user.click(navigator.getByRole('button', { name: 'Авторизация' }));
+  expect(navigator.getByRole('button', { name: 'Пароли' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await user.click(navigator.getByRole('button', { name: 'Пароли' }));
+  await user.click(navigator.getByRole('button', { name: 'Платежи' }));
+  await user.click(navigator.getByRole('button', { name: 'Без сьюта' }));
   expect(
     within(roots)
       .getAllByRole('button', { expanded: true })
@@ -172,6 +237,8 @@ it('collapses suites by keyboard and reveals the selected branch when navigating
   const user = userEvent.setup();
   mount();
   const navigator = within(screen.getByRole('navigation', { name: 'Кейсы запуска' }));
+  await user.click(navigator.getByRole('button', { name: 'Авторизация' }));
+  await user.click(navigator.getByRole('button', { name: 'Пароли' }));
   const passwords = navigator.getByRole('button', { name: 'Пароли' });
   passwords.focus();
   await user.keyboard('{Enter}');
@@ -212,9 +279,11 @@ it('combines status and search without changing suite order when an earlier case
   expect(screen.getByRole('heading', { name: 'Смена пароля' })).toBeVisible();
 });
 
-it('allows execution when all cases are ungrouped', () => {
+it('allows execution when all cases are ungrouped', async () => {
+  const user = userEvent.setup();
   mount('loose', () => {}, [cases[0]!]);
   const navigator = within(screen.getByRole('navigation', { name: 'Кейсы запуска' }));
+  await user.click(navigator.getByRole('button', { name: 'Без сьюта' }));
   expect(navigator.getAllByRole('button', { expanded: true })).toHaveLength(1);
   expect(navigator.getByRole('list', { name: 'Без сьюта' })).toBeVisible();
   expect(navigator.getByRole('button', { name: /WEB-9/ })).toHaveAttribute('aria-current', 'true');
@@ -230,6 +299,8 @@ it('preserves the step draft when switching between cases through the suite tree
     'Пароль обновлён',
   );
   const navigator = within(screen.getByRole('navigation', { name: 'Кейсы запуска' }));
+  await user.click(navigator.getByRole('button', { name: 'Авторизация' }));
+  await user.click(navigator.getByRole('button', { name: 'Пароли' }));
   await user.click(navigator.getByRole('button', { name: /WEB-1/ }));
   expect(screen.getByRole('textbox', { name: 'Фактический результат шага 1' })).toHaveValue('');
   await user.click(navigator.getByRole('button', { name: /WEB-2/ }));

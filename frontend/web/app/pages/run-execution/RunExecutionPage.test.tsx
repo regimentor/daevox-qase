@@ -159,12 +159,14 @@ it('opens a saved snapshot by direct link and changes the route when selecting a
   const navigator = within(screen.getByRole('navigation', { name: 'Кейсы запуска' }));
   expect(navigator.getByRole('button', { name: 'Аутентификация' })).toHaveAttribute(
     'aria-expanded',
-    'true',
+    'false',
   );
+  await user.click(navigator.getByRole('button', { name: 'Аутентификация' }));
   expect(navigator.getByRole('button', { name: /В сьюте кейс/ })).toHaveAttribute(
     'aria-current',
     'true',
   );
+  await user.click(navigator.getByRole('button', { name: 'Без сьюта' }));
   await user.click(navigator.getByRole('button', { name: /Без сьюта кейс/ }));
   expect(screen.getByRole('heading', { name: 'Без сьюта кейс' })).toBeVisible();
   expect(screen.getByRole('status', { name: 'Адрес' })).toHaveTextContent(
@@ -291,6 +293,7 @@ it('keeps a completed run navigable while preventing result changes', async () =
   await screen.findByRole('heading', { name: 'В сьюте кейс' });
   expect(screen.getByRole('button', { name: 'Сохранить результат' })).toBeDisabled();
   const navigator = within(screen.getByRole('navigation', { name: 'Кейсы запуска' }));
+  await user.click(navigator.getByRole('button', { name: 'Без сьюта' }));
   await user.click(navigator.getByRole('button', { name: /Без сьюта кейс/ }));
   expect(screen.getByRole('heading', { name: 'Без сьюта кейс' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Сохранить результат' })).toBeDisabled();

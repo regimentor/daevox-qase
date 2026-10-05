@@ -1,7 +1,12 @@
 import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
   CloseOutlined,
+  MinusCircleOutlined,
+  PauseCircleOutlined,
+  RightCircleOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
 import {
@@ -13,9 +18,10 @@ import {
   Radio,
   Select,
   Space,
+  Tag,
   Typography,
 } from 'antd';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AttachmentUploader } from '@/features/attachment-upload';
 import { ResultSubmitPanel } from '@/features/result-submit';
 import {
@@ -23,7 +29,7 @@ import {
   type RunCaseFieldsFragment,
   type TestStepResultInput,
 } from '@/shared/api/graphql';
-import { PriorityTag, SeverityTag, StatusTag } from '@/shared/ui';
+import { getStatusLabel, PriorityTag, SeverityTag, StatusTag } from '@/shared/ui';
 import { clampPercentage } from '@/shared/lib/number';
 import {
   runSuiteTree,
@@ -35,6 +41,15 @@ interface StepDraft {
   status?: TestResultStatus;
   actualResult?: string;
 }
+const caseStatuses = ['UNTESTED', 'PASSED', 'FAILED', 'BLOCKED', 'SKIPPED'] as const;
+const statusColors = ['default', 'success', 'error', 'warning', 'processing'] as const;
+const statusIcons = [
+  <MinusCircleOutlined aria-hidden key="untested" />,
+  <CheckCircleOutlined aria-hidden key="passed" />,
+  <CloseCircleOutlined aria-hidden key="failed" />,
+  <PauseCircleOutlined aria-hidden key="blocked" />,
+  <RightCircleOutlined aria-hidden key="skipped" />,
+];
 export function ExecutionWorkspace({
   workspaceId,
   runId,
@@ -55,10 +70,65 @@ export function ExecutionWorkspace({
   onExit(): void;
 }) {
   const orderedCases = useMemo(() => runCasesInTreeOrder(cases), [cases]);
+  const suiteStats = useMemo(() => {
+    const stats = new Map<string, { total: number; counts: number[] }>();
+    const visit = (nodes: RunNavigationNode[]): number[] => {
+      const counts = caseStatuses.map(() => 0);
+      for (const node of nodes) {
+        if (node.kind === 'case') {
+          counts[caseStatuses.indexOf(node.item.currentStatus)]! += 1;
+        } else {
+          const childCounts = visit(node.children);
+          stats.set(node.id, {
+            total: childCounts.reduce((sum, count) => sum + count, 0),
+            counts: childCounts,
+          });
+          childCounts.forEach((count, index) => {
+            counts[index]! += count;
+          });
+        }
+      }
+      return counts;
+    };
+    visit(runSuiteTree(cases));
+    return stats;
+  }, [cases]);
   const current = orderedCases.find((item) => item.id === currentId) ?? orderedCases[0];
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>();
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    const suiteIds = (nodes: RunNavigationNode[]): string[] =>
+      nodes.flatMap((node) => (node.kind === 'suite' ? [node.id, ...suiteIds(node.children)] : []));
+    return new Set(suiteIds(runSuiteTree(cases)));
+  });
+  const previousId = useRef(currentId);
+  const headerRef = useRef<HTMLElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [gridWidth, setGridWidth] = useState(1320);
+  const [widths, setWidths] = useState({ left: 520, right: 360 });
+  const drag = useRef<{
+    side: 'left' | 'right';
+    pointerId: number;
+    x: number;
+    width: number;
+  } | null>(null);
+  const rightWidth = Math.max(280, Math.min(widths.right, gridWidth - 420 - 260 - 12));
+  const leftWidth = Math.max(260, Math.min(widths.left, gridWidth - 420 - rightWidth - 12));
+  const navId = useId();
+  const resultId = useId();
+  const [headerHeight, setHeaderHeight] = useState(70);
+  useEffect(() => {
+    const header = headerRef.current;
+    const grid = gridRef.current;
+    if (!header || !grid) return;
+    const observer = new ResizeObserver(() => {
+      setHeaderHeight(header.getBoundingClientRect().height);
+      setGridWidth(grid.getBoundingClientRect().width);
+    });
+    observer.observe(header);
+    observer.observe(grid);
+    return () => observer.disconnect();
+  }, []);
   const treeId = useId();
   const [steps, setSteps] = useState<Record<string, StepDraft>>({});
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
@@ -66,12 +136,13 @@ export function ExecutionWorkspace({
     if (search || status) setCollapsed(new Set());
   }, [search, status]);
   useEffect(() => {
-    if (!current) return;
+    if (!current || previousId.current === currentId) return;
+    previousId.current = currentId;
     const ancestors = current.suiteMetadata.length
       ? current.suiteMetadata.map((suite) => suite.suiteId)
       : ['ungrouped'];
     setCollapsed((value) => new Set([...value].filter((id) => !ancestors.includes(id))));
-  }, [current]);
+  }, [current, currentId]);
   useEffect(() => {
     if (!current) return;
     try {
@@ -123,6 +194,27 @@ export function ExecutionWorkspace({
             >
               {node.title}
             </button>
+            <div
+              className="navigator-suite-stats"
+              role="group"
+              aria-label={`Статистика сьюта ${node.title}`}
+            >
+              <span>Кейсов: {suiteStats.get(node.id)!.total}</span>
+              {caseStatuses.map((value, index) => {
+                const label = `${getStatusLabel(value)}: ${suiteStats.get(node.id)!.counts[index]}`;
+                return (
+                  <Tag
+                    key={value}
+                    color={statusColors[index]}
+                    icon={statusIcons[index]}
+                    aria-label={label}
+                    title={label}
+                  >
+                    {suiteStats.get(node.id)!.counts[index]}
+                  </Tag>
+                );
+              })}
+            </div>
             <ul id={`${treeId}-${node.id}`} aria-label={node.title} hidden={collapsed.has(node.id)}>
               {renderNodes(node.children)}
             </ul>
@@ -168,9 +260,71 @@ export function ExecutionWorkspace({
     orderedCases.find(
       (item, itemIndex) => itemIndex > index && item.currentStatus === 'UNTESTED',
     ) ?? orderedCases.find((item) => item.currentStatus === 'UNTESTED');
+  const resizeHandle = (side: 'left' | 'right') => {
+    const minimum = side === 'left' ? 260 : 280;
+    const maximum = Math.max(
+      minimum,
+      gridWidth - 420 - 12 - (side === 'left' ? rightWidth : leftWidth),
+    );
+    const width = side === 'left' ? leftWidth : rightWidth;
+    return (
+      <div
+        role="separator"
+        className="execution-resizer"
+        tabIndex={0}
+        aria-label={side === 'left' ? 'Ширина списка кейсов' : 'Ширина результата попытки'}
+        aria-controls={side === 'left' ? navId : resultId}
+        aria-orientation="vertical"
+        aria-valuemin={minimum}
+        aria-valuemax={maximum}
+        aria-valuenow={width}
+        onPointerDown={(event) => {
+          if (event.button !== 0 || gridWidth <= 1023) return;
+          event.preventDefault();
+          event.currentTarget.focus();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          drag.current = { side, pointerId: event.pointerId, x: event.clientX, width };
+        }}
+        onPointerMove={(event) => {
+          const active = drag.current;
+          if (!active || active.side !== side || active.pointerId !== event.pointerId) return;
+          const next = active.width + (event.clientX - active.x) * (side === 'left' ? 1 : -1);
+          setWidths((value) => ({ ...value, [side]: Math.max(minimum, Math.min(maximum, next)) }));
+        }}
+        onPointerUp={() => {
+          drag.current = null;
+        }}
+        onPointerCancel={() => {
+          drag.current = null;
+        }}
+        onLostPointerCapture={() => {
+          drag.current = null;
+        }}
+        onKeyDown={(event) => {
+          const direction = side === 'left' ? 1 : -1;
+          const next =
+            event.key === 'Home'
+              ? minimum
+              : event.key === 'End'
+                ? maximum
+                : event.key === 'ArrowRight'
+                  ? width + direction * 20
+                  : event.key === 'ArrowLeft'
+                    ? width - direction * 20
+                    : undefined;
+          if (next === undefined) return;
+          event.preventDefault();
+          setWidths((value) => ({ ...value, [side]: Math.max(minimum, Math.min(maximum, next)) }));
+        }}
+      />
+    );
+  };
   return (
-    <div className="execution-shell">
-      <header className="execution-header">
+    <div
+      className="execution-shell"
+      style={{ '--execution-header-height': `${headerHeight}px` } as React.CSSProperties}
+    >
+      <header ref={headerRef} className="execution-header">
         <div>
           <Typography.Title level={1} style={{ fontSize: 20 }}>
             {title}
@@ -188,8 +342,12 @@ export function ExecutionWorkspace({
           Выйти
         </Button>
       </header>
-      <div className="execution-grid">
-        <nav className="case-navigator" aria-label="Кейсы запуска">
+      <div
+        ref={gridRef}
+        className="execution-grid"
+        style={{ gridTemplateColumns: `${leftWidth}px 6px minmax(420px, 1fr) 6px ${rightWidth}px` }}
+      >
+        <nav id={navId} className="case-navigator" aria-label="Кейсы запуска">
           <Input
             aria-label="Поиск кейсов запуска"
             prefix={<SearchOutlined />}
@@ -233,6 +391,7 @@ export function ExecutionWorkspace({
             </Button>
           </Space>
         </nav>
+        {resizeHandle('left')}
         <main className="snapshot-content">
           <Space>
             <Typography.Text className="mono-id">{current.displayId}</Typography.Text>
@@ -326,25 +485,28 @@ export function ExecutionWorkspace({
             </Card>
           ))}
         </main>
-        <ResultSubmitPanel
-          runId={runId}
-          runCaseId={current.id}
-          stepResults={stepResults}
-          attachmentIds={attachmentIds}
-          attachmentControl={
-            <AttachmentUploader
-              workspaceId={workspaceId}
-              disabled={disabled}
-              onChange={setAttachmentIds}
-            />
-          }
-          disabled={disabled}
-          onSubmitted={() => {
-            sessionStorage.removeItem(`daevox.step-draft.${current.id}`);
-            setSteps({});
-            if (nextUntested) onSelect(nextUntested.id);
-          }}
-        />
+        {resizeHandle('right')}
+        <div id={resultId} className="execution-result">
+          <ResultSubmitPanel
+            runId={runId}
+            runCaseId={current.id}
+            stepResults={stepResults}
+            attachmentIds={attachmentIds}
+            attachmentControl={
+              <AttachmentUploader
+                workspaceId={workspaceId}
+                disabled={disabled}
+                onChange={setAttachmentIds}
+              />
+            }
+            disabled={disabled}
+            onSubmitted={() => {
+              sessionStorage.removeItem(`daevox.step-draft.${current.id}`);
+              setSteps({});
+              if (nextUntested) onSelect(nextUntested.id);
+            }}
+          />
+        </div>
       </div>
     </div>
   );
