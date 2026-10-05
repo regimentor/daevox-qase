@@ -5,9 +5,11 @@ import { defineConfig } from 'vitest/config';
 import { sourceCoveragePlugin } from './coverage-plugin.ts';
 const directory = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
+  root: directory,
   plugins: [process.env.VITE_COVERAGE === 'true' && sourceCoveragePlugin(), react()],
   resolve: { alias: { '@': path.resolve(directory, 'app') } },
   test: {
+    name: 'web',
     environment: 'jsdom',
     fileParallelism: process.env.VITE_COVERAGE !== 'true',
     setupFiles: ['./app/shared/test/setup.ts'],

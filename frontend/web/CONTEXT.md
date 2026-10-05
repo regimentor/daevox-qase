@@ -43,4 +43,4 @@ Run `npm run codegen` after changing GraphQL operations or the API SDL. Run `npm
 
 ## Verification
 
-For UI or feature changes, run `npm run typecheck:web`, `npm run test:web`, and `npm run lint`. For GraphQL changes, include codegen and codegen check. For route or browser behavior, use Storybook and/or `npm run test:web:e2e`; the e2e workflow starts isolated PostgreSQL and MinIO services with the real API.
+For UI or feature changes, run `npm run typecheck:web`, `npm run test:web`, and `npm run lint`. For GraphQL changes, include codegen and codegen check. For route or browser behavior, use Storybook and/or `npm run test:web:e2e`; the e2e workflow starts isolated PostgreSQL and SeaweedFS services with the real API.

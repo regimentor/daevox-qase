@@ -29,6 +29,15 @@ case "$public_origin" in
     ;;
 esac
 
+public_s3_origin=${PUBLIC_S3_ORIGIN:-}
+case "$public_s3_origin" in
+  http://*|https://*) ;;
+  *) printf '%s\n' 'PUBLIC_S3_ORIGIN is required, for example http://server.example:9000 (use HTTPS for an HTTPS app).' >&2; exit 1 ;;
+esac
+case "$public_s3_origin" in
+  *'|'*|*'&'*|*' '*|*'	'*) printf '%s\n' 'PUBLIC_S3_ORIGIN contains unsupported characters.' >&2; exit 1 ;;
+esac
+
 if ! command -v openssl >/dev/null 2>&1; then
   printf '%s\n' 'OpenSSL is required to initialize production JWT keys and credentials.' >&2
   exit 1
@@ -48,8 +57,8 @@ openssl pkey -in "$temp_dir/access-private.pem" -pubout -outform DER -out "$temp
 private_key=$(openssl base64 -A -in "$temp_dir/access-private.der")
 public_key=$(openssl base64 -A -in "$temp_dir/access-public.der")
 postgres_password=$(openssl rand -hex 24)
-minio_root_user="minio-$(openssl rand -hex 8)"
-minio_root_password=$(openssl rand -hex 24)
+s3_access_key="seaweed-$(openssl rand -hex 8)"
+s3_secret_key=$(openssl rand -hex 24)
 seed_demo_password=$(openssl rand -hex 16)
 
 cp "$repo_root/.env.example" "$env_file"
@@ -66,10 +75,10 @@ replace_env DATABASE_URL "postgresql://daevox:${postgres_password}@postgres:5432
 replace_env ACCESS_TOKEN_PRIVATE_KEY "$private_key"
 replace_env ACCESS_TOKEN_PUBLIC_KEY "$public_key"
 replace_env CORS_ORIGINS "$public_origin"
-replace_env S3_ENDPOINT http://minio:9000
+replace_env S3_ENDPOINT http://seaweedfs:8333
 replace_env S3_BUCKET daevox-attachments
-replace_env S3_ACCESS_KEY_ID "$minio_root_user"
-replace_env S3_SECRET_ACCESS_KEY "$minio_root_password"
+replace_env S3_ACCESS_KEY_ID "$s3_access_key"
+replace_env S3_SECRET_ACCESS_KEY "$s3_secret_key"
 replace_env S3_FORCE_PATH_STYLE true
 replace_env SEED_DEMO_PASSWORD "$seed_demo_password"
 replace_env ALLOW_PRODUCTION_SEED false
@@ -78,8 +87,8 @@ replace_env NGINX_PORT "${NGINX_PORT:-8080}"
 replace_env POSTGRES_USER daevox
 replace_env POSTGRES_PASSWORD "$postgres_password"
 replace_env POSTGRES_DB daevox
-replace_env MINIO_ROOT_USER "$minio_root_user"
-replace_env MINIO_ROOT_PASSWORD "$minio_root_password"
+replace_env S3_PUBLIC_ENDPOINT "$public_s3_origin"
+replace_env S3_PORT "${S3_PORT:-9000}"
 
 chmod 600 "$env_file"
 printf '%s\n' "Initialized $env_file. Keep it private and reuse it for future deployments."

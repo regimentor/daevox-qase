@@ -12,28 +12,35 @@ services:
       timeout: 3s
       retries: 20
     volumes: ['postgres-data:/var/lib/postgresql/data']
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address :9001
-    environment:
-      MINIO_ROOT_USER: minio-local-user
-      MINIO_ROOT_PASSWORD: replace-for-local-development
-    ports: ['9000:9000', '9001:9001']
-    healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    volumes: ['minio-data:/data']
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      minio: { condition: service_healthy }
-    entrypoint: ['/bin/sh', '-c']
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
     command:
       [
-        'mc alias set local http://minio:9000 minio-local-user replace-for-local-development && mc mb --ignore-existing local/daevox-attachments && mc anonymous set none local/daevox-attachments',
+        'mini',
+        '-dir=/data',
+        '-ip=127.0.0.1',
+        '-ip.bind=0.0.0.0',
+        '-s3.port=8333',
+        '-webdav=false',
+        '-admin.ui=false',
+        '-s3.port.iceberg=0',
+        '-s3.port.lance=0',
       ]
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-seaweed-local-user}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-replace-for-local-development}
+      S3_BUCKET: ${S3_BUCKET:-daevox-attachments}
+    ports: ['9000:8333']
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS -o /dev/null http://127.0.0.1:8888/buckets/$${S3_BUCKET}/ &&
+          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8333/)" = 403 ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes: ['seaweedfs-data:/data']
 volumes:
   postgres-data:
-  minio-data:
+  seaweedfs-data:

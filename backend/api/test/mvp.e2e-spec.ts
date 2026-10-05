@@ -1,5 +1,5 @@
 import { CreateBucketCommand, S3Client } from '@aws-sdk/client-s3';
-import { MinioContainer, type StartedMinioContainer } from '@testcontainers/minio';
+import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -14,10 +14,10 @@ type Auth = { accessToken: string; refreshToken: string; user: Identifier };
 
 describe('Daevox MVP GraphQL walkthrough', () => {
   let postgres: StartedPostgreSqlContainer;
-  let minio: StartedMinioContainer;
+  let seaweedfs: StartedTestContainer;
   let app: INestApplication;
   let databaseUrl: string;
-  let minioStopped = false;
+  let seaweedfsStopped = false;
   let admin: Auth;
   let member: Auth;
   let workspace: Identifier;
@@ -82,15 +82,29 @@ describe('Daevox MVP GraphQL walkthrough', () => {
   }
 
   beforeAll(async () => {
-    [postgres, minio] = await Promise.all([
+    [postgres, seaweedfs] = await Promise.all([
       new PostgreSqlContainer('postgres:17-alpine')
         .withDatabase('daevox_test')
         .withUsername('daevox')
         .withPassword('daevox')
         .start(),
-      new MinioContainer('minio/minio:latest')
-        .withUsername('minio-test-user')
-        .withPassword('minio-test-password')
+      new GenericContainer('chrislusf/seaweedfs:4.48')
+        .withCommand([
+          'mini',
+          '-dir=/data',
+          '-ip=127.0.0.1',
+          '-ip.bind=0.0.0.0',
+          '-webdav=false',
+          '-admin.ui=false',
+          '-s3.port.iceberg=0',
+          '-s3.port.lance=0',
+        ])
+        .withEnvironment({
+          AWS_ACCESS_KEY_ID: 'seaweedfs-test-user',
+          AWS_SECRET_ACCESS_KEY: 'seaweedfs-test-password',
+        })
+        .withExposedPorts(8333)
+        .withWaitStrategy(Wait.forHttp('/', 8333).forStatusCode(403))
         .start(),
     ]);
     databaseUrl = postgres.getConnectionUri().replace(/^postgres:/, 'postgresql:');
@@ -104,11 +118,12 @@ describe('Daevox MVP GraphQL walkthrough', () => {
       ACCESS_TOKEN_TTL_SECONDS: '900',
       REFRESH_TOKEN_TTL_SECONDS: '2592000',
       CORS_ORIGINS: 'http://localhost:3001',
-      S3_ENDPOINT: minio.getConnectionUrl(),
+      S3_ENDPOINT: `http://${seaweedfs.getHost()}:${seaweedfs.getMappedPort(8333)}`,
+      S3_PUBLIC_ENDPOINT: '',
       S3_REGION: 'us-east-1',
       S3_BUCKET: 'daevox-test',
-      S3_ACCESS_KEY_ID: minio.getUsername(),
-      S3_SECRET_ACCESS_KEY: minio.getPassword(),
+      S3_ACCESS_KEY_ID: 'seaweedfs-test-user',
+      S3_SECRET_ACCESS_KEY: 'seaweedfs-test-password',
       S3_FORCE_PATH_STYLE: 'true',
       ATTACHMENT_MAX_BYTES: '26214400',
       ATTACHMENT_ALLOWED_MIME_TYPES:
@@ -120,10 +135,13 @@ describe('Daevox MVP GraphQL walkthrough', () => {
       stdio: 'pipe',
     });
     const s3 = new S3Client({
-      endpoint: minio.getConnectionUrl(),
+      endpoint: `http://${seaweedfs.getHost()}:${seaweedfs.getMappedPort(8333)}`,
       region: 'us-east-1',
       forcePathStyle: true,
-      credentials: { accessKeyId: minio.getUsername(), secretAccessKey: minio.getPassword() },
+      credentials: {
+        accessKeyId: 'seaweedfs-test-user',
+        secretAccessKey: 'seaweedfs-test-password',
+      },
     });
     await s3.send(new CreateBucketCommand({ Bucket: 'daevox-test' }));
     const { AppModule } = await import('../src/app.module.js');
@@ -134,7 +152,7 @@ describe('Daevox MVP GraphQL walkthrough', () => {
   afterAll(async () => {
     await app?.close();
     await postgres?.stop();
-    if (!minioStopped) await minio?.stop();
+    if (!seaweedfsStopped) await seaweedfs?.stop();
   });
 
   it('executes auth, tenant, authoring, immutable run, result, attachment and analytics flow', async () => {
@@ -1652,8 +1670,8 @@ describe('Daevox MVP GraphQL walkthrough', () => {
         member.accessToken,
       )
     ).presignAttachmentUpload.attachment;
-    await minio.stop();
-    minioStopped = true;
+    await seaweedfs.stop();
+    seaweedfsStopped = true;
     await graphql(
       'mutation($id:UUID!){deleteAttachment(id:$id)}',
       { id: pending.id },

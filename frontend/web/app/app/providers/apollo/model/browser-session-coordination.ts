@@ -28,7 +28,7 @@ interface LockAdapter {
 
 interface BrowserCoordinationOptions {
   storage?: Storage;
-  locks?: LockAdapter;
+  locks?: LockAdapter | null;
   createChannel?: (name: string) => MessageChannel;
   eventTarget?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
   now?: () => number;
@@ -46,8 +46,10 @@ export function createBrowserSessionCoordination(
 ): SessionCoordination & { dispose(): void } {
   const storage = options.storage ?? (typeof window === 'undefined' ? undefined : localStorage);
   const locks =
-    options.locks ??
-    (typeof navigator === 'undefined' || !navigator.locks ? undefined : navigator.locks);
+    options.locks === null
+      ? undefined
+      : (options.locks ??
+        (typeof navigator === 'undefined' || !navigator.locks ? undefined : navigator.locks));
   const eventTarget = options.eventTarget ?? (typeof window === 'undefined' ? undefined : window);
   const now = options.now ?? Date.now;
   const delay =

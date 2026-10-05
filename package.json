@@ -23,7 +23,7 @@
     "lint": "oxlint --deny-warnings backend frontend && npm run lint:boundaries -w @app/web",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "test": "vitest run --exclude '**/dist/**' --exclude '**/*.e2e-spec.ts' --exclude '**/*.integration-spec.ts'",
+    "test": "vitest run",
     "test:coverage": "vitest run --config vitest.coverage.config.mts --coverage",
     "test:e2e": "vitest run --config backend/api/vitest.e2e.config.ts",
     "db:generate": "npm run db:generate -w @app/storage",
@@ -43,7 +43,6 @@
     "@storybook/addon-a11y": "10.5.9",
     "@storybook/addon-vitest": "10.5.9",
     "@storybook/react-vite": "10.5.9",
-    "@testcontainers/minio": "12.1.0",
     "@testcontainers/postgresql": "12.1.0",
     "@types/express": "5.0.3",
     "@types/node": "^26.0.0",
@@ -69,6 +68,9 @@
     "@nestjs/apollo": {
       "@apollo/server": "5.5.1"
     },
+    "@nestjs/common": "11.2.7",
+    "@nestjs/core": "11.2.7",
+    "@nestjs/platform-express": "11.2.7",
     "@prisma/config": {
       "deepmerge-ts": "8.0.2"
     },

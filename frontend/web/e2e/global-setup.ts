@@ -1,5 +1,5 @@
 import { CreateBucketCommand, S3Client } from '@aws-sdk/client-s3';
-import { MinioContainer } from '@testcontainers/minio';
+import { GenericContainer, Wait } from 'testcontainers';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { NestFactory } from '@nestjs/core';
 import { execFileSync } from 'node:child_process';
@@ -17,15 +17,29 @@ export default async function globalSetup(_config: FullConfig) {
     stdio: 'pipe',
   });
 
-  const [postgres, minio] = await Promise.all([
+  const [postgres, seaweedfs] = await Promise.all([
     new PostgreSqlContainer('postgres:17-alpine')
       .withDatabase('daevox_web_e2e')
       .withUsername('daevox')
       .withPassword('daevox')
       .start(),
-    new MinioContainer('minio/minio:latest')
-      .withUsername('minio-test-user')
-      .withPassword('minio-test-password')
+    new GenericContainer('chrislusf/seaweedfs:4.48')
+      .withCommand([
+        'mini',
+        '-dir=/data',
+        '-ip=127.0.0.1',
+        '-ip.bind=0.0.0.0',
+        '-webdav=false',
+        '-admin.ui=false',
+        '-s3.port.iceberg=0',
+        '-s3.port.lance=0',
+      ])
+      .withEnvironment({
+        AWS_ACCESS_KEY_ID: 'seaweedfs-test-user',
+        AWS_SECRET_ACCESS_KEY: 'seaweedfs-test-password',
+      })
+      .withExposedPorts(8333)
+      .withWaitStrategy(Wait.forHttp('/', 8333).forStatusCode(403))
       .start(),
   ]);
 
@@ -40,11 +54,12 @@ export default async function globalSetup(_config: FullConfig) {
     ACCESS_TOKEN_TTL_SECONDS: '60',
     REFRESH_TOKEN_TTL_SECONDS: '2592000',
     CORS_ORIGINS: 'http://127.0.0.1:5173',
-    S3_ENDPOINT: minio.getConnectionUrl(),
+    S3_ENDPOINT: `http://${seaweedfs.getHost()}:${seaweedfs.getMappedPort(8333)}`,
+    S3_PUBLIC_ENDPOINT: '',
     S3_REGION: 'us-east-1',
     S3_BUCKET: 'daevox-web-e2e',
-    S3_ACCESS_KEY_ID: minio.getUsername(),
-    S3_SECRET_ACCESS_KEY: minio.getPassword(),
+    S3_ACCESS_KEY_ID: 'seaweedfs-test-user',
+    S3_SECRET_ACCESS_KEY: 'seaweedfs-test-password',
     S3_FORCE_PATH_STYLE: 'true',
     ATTACHMENT_MAX_BYTES: '26214400',
     ATTACHMENT_ALLOWED_MIME_TYPES:
@@ -58,10 +73,10 @@ export default async function globalSetup(_config: FullConfig) {
   });
 
   const s3 = new S3Client({
-    endpoint: minio.getConnectionUrl(),
+    endpoint: `http://${seaweedfs.getHost()}:${seaweedfs.getMappedPort(8333)}`,
     region: 'us-east-1',
     forcePathStyle: true,
-    credentials: { accessKeyId: minio.getUsername(), secretAccessKey: minio.getPassword() },
+    credentials: { accessKeyId: 'seaweedfs-test-user', secretAccessKey: 'seaweedfs-test-password' },
   });
   await s3.send(new CreateBucketCommand({ Bucket: 'daevox-web-e2e' }));
 
@@ -74,6 +89,6 @@ export default async function globalSetup(_config: FullConfig) {
 
   return async () => {
     await app.close();
-    await Promise.all([postgres.stop(), minio.stop()]);
+    await Promise.all([postgres.stop(), seaweedfs.stop()]);
   };
 }

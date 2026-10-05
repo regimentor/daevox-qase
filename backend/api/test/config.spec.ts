@@ -25,6 +25,16 @@ describe('configuration', () => {
     expect(config.attachmentMaxBytes).toBe(26_214_400);
   });
 
+  it('uses an optional browser endpoint without changing the internal S3 endpoint', () => {
+    expect(loadConfig({ ...valid, S3_PUBLIC_ENDPOINT: '' }).s3.publicEndpoint).toBeUndefined();
+    const config = loadConfig({ ...valid, S3_PUBLIC_ENDPOINT: 'https://attachments.example.com' });
+    expect(config.s3.endpoint).toBe(valid.S3_ENDPOINT);
+    expect(config.s3.publicEndpoint).toBe('https://attachments.example.com');
+    expect(() => loadConfig({ ...valid, S3_PUBLIC_ENDPOINT: 'invalid' })).toThrow(
+      'Invalid environment configuration',
+    );
+  });
+
   it('fails before startup when required configuration is invalid', () => {
     expect(() => loadConfig({ ...valid, DATABASE_URL: 'not-a-url' })).toThrow(
       'Invalid environment configuration',

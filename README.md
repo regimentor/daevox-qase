@@ -33,7 +33,7 @@ openssl pkey -in access-private.pem -pubout -out access-public.pem
 
 Put either the PEM text (with escaped newlines) or the base64-encoded DER payload into `ACCESS_TOKEN_PRIVATE_KEY` and `ACCESS_TOKEN_PUBLIC_KEY`. Never commit real keys. The API listens on `POST /graphql`; liveness and readiness are `GET /health/live` and `GET /health/ready`.
 
-Development enables introspection and Apollo's landing page. Production disables introspection. Readiness calls both PostgreSQL and the private S3/MinIO bucket.
+Development enables introspection and Apollo's landing page. Production disables introspection. Readiness calls both PostgreSQL and the private S3/SeaweedFS bucket.
 
 ## Frontend
 
@@ -60,7 +60,7 @@ npm run build-storybook
 npm run test:web:e2e
 ```
 
-Browser e2e tests start isolated PostgreSQL and MinIO containers plus the real API. Vitest coverage uses the V8 provider; the aggregate gate merges source-level unit, Storybook browser and Playwright coverage, enforcing 80% for statements, branches, functions and lines.
+Browser e2e tests start isolated PostgreSQL and SeaweedFS containers plus the real API. Vitest coverage uses the V8 provider; the aggregate gate merges source-level unit, Storybook browser and Playwright coverage, enforcing 80% for statements, branches, functions and lines.
 
 ## Design
 
@@ -71,7 +71,7 @@ Browser e2e tests start isolated PostgreSQL and MinIO containers plus the real A
 - Results are append-only. Latest status and summaries use `(created_at DESC, id DESC)` and set-based SQL.
 - Suite reorder, last-admin changes, bulk replacements, state transitions, snapshots, assignments, and results use transactions.
 - Nested membership users use a request-scoped DataLoader; other nested collections are fetched as deterministic relation batches by their owning application service.
-- Attachment bytes never pass through GraphQL. S3 and MinIO share one `ObjectStorage` contract. Failed object deletion leaves an `object_deletions` outbox row for `npm run attachments:cleanup`.
+- Attachment bytes never pass through GraphQL. S3 and SeaweedFS share one `ObjectStorage` contract. Failed object deletion leaves an `object_deletions` outbox row for `npm run attachments:cleanup`.
 - Logs are one-line JSON with correlation ID, operation name, authenticated user ID, duration, and result code. Request/token/password/storage-key data is never logged.
 
 ## Database and demo data
@@ -92,7 +92,7 @@ npm run test:e2e
 npm run test:coverage
 ```
 
-The e2e suite starts disposable PostgreSQL and MinIO Testcontainers, applies real migrations, and drives the MVP only through GraphQL. It covers tenant isolation, MEMBER/ADMIN rules, last-admin protection, concurrent numbering with transaction retries, filters/search/pagination, complete disposable CRUD lifecycles, suite cycles, run source validation, immutable snapshots, repeated result attempts, summaries/dashboard, auth rate limiting, direct attachment upload/download, and the object-deletion failure outbox.
+The e2e suite starts disposable PostgreSQL and SeaweedFS Testcontainers, applies real migrations, and drives the MVP only through GraphQL. It covers tenant isolation, MEMBER/ADMIN rules, last-admin protection, concurrent numbering with transaction retries, filters/search/pagination, complete disposable CRUD lifecycles, suite cycles, run source validation, immutable snapshots, repeated result attempts, summaries/dashboard, auth rate limiting, direct attachment upload/download, and the object-deletion failure outbox.
 
 Coverage combines unit and real-container e2e execution. CI-enforced global minimums are 90% statements, 75% branches, 95% functions, and 90% lines. The current suite covers 93.06% statements, 78.21% branches, 97.25% functions, and 95.52% lines; an HTML report is written to `coverage/index.html`.
 

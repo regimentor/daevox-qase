@@ -11,7 +11,7 @@ The repository uses npm workspaces for `@app/storage`, `@app/api`, and `@app/web
 
 ## Local setup
 
-Create the API environment and start PostgreSQL and MinIO:
+Create the API environment and start PostgreSQL and SeaweedFS:
 
 ```bash
 cp .env.example .env
@@ -25,6 +25,12 @@ npm run db:seed
 Set `SEED_DEMO_PASSWORD` to a password of at least 12 characters before seeding. The seed is intended for local/demo use; production seeding also requires `ALLOW_PRODUCTION_SEED=true`.
 
 The root `package.json` records version-pinned dependency install-script approvals in `allowScripts`. npm versions that enforce this policy skip unapproved dependency scripts. After updating dependencies, run `npm install-scripts ls`, review the listed scripts, and approve the required packages with `npm install-scripts approve <pkg>`. Commit the updated approvals. To run scripts skipped during an earlier installation, run `npm rebuild` after approving them, or reinstall with `npm ci`.
+
+## Nest dependency alignment
+
+The root overrides pin `@nestjs/common`, `@nestjs/core`, and `@nestjs/platform-express` to `11.2.7`. Keep these overrides aligned with the API workspace's direct dependencies. GraphQL, Apollo, configuration and throttling must resolve the same Nest classes as the application: mixed root/workspace copies make dependency injection fail with an unresolved `HttpAdapterHost`. The API bootstrap regression test runs a separate Node process so the real installed dependency tree is exercised.
+
+After changing Nest versions, regenerate the lockfile through npm and verify `npm ls @nestjs/core @nestjs/common @nestjs/platform-express` plus `npx vitest run backend/api/test/graphql-bootstrap.spec.ts`. A clean install uses the committed lockfile with `npm ci`.
 
 ## Dependency security
 
@@ -86,8 +92,22 @@ Start with the smallest check for the changed area:
 - Frontend or operations: codegen, codegen check, frontend typecheck, frontend tests, and lint.
 - Cross-package changes: run the full gate from `AGENTS.md`.
 
-The e2e suite uses disposable PostgreSQL and MinIO Testcontainers. Coverage combines unit, Storybook browser, and Playwright execution; it is expected to be slower and more infrastructure-sensitive than focused checks.
+`npm test` uses the root Vitest projects: API unit tests run in Node, and frontend unit/component tests use the web configuration with jsdom, setup files, and the `@` alias. Playwright browser tests and API e2e/integration tests are excluded from this unit-test command. `npm run test:web` runs the same web project independently.
+
+The e2e suite uses disposable PostgreSQL and SeaweedFS Testcontainers. Coverage combines unit, Storybook browser, and Playwright execution; it is expected to be slower and more infrastructure-sensitive than focused checks.
 
 ## Change safety
 
 GraphQL SDL is the public contract. API generated interfaces and frontend GraphQL types are derived from it. Database changes require a new Prisma migration; applied migrations must remain immutable. Keep tenant scoping, transaction boundaries, immutable run snapshots, append-only results, and object-storage cleanup behavior intact when changing domain code.
+
+## Object-storage compatibility
+
+Local Compose uses SeaweedFS 4.48, with S3 at `http://localhost:9000` and persistent state in `seaweedfs-data`. Credentials come from `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` in `.env`; bucket creation is idempotent. No master/filer/admin ports are published. Existing MinIO data needs S3 copying before switching; see [deployment operations](deployment.md).
+
+The focused compatibility test runs the real adapter against a disposable SeaweedFS container:
+
+```bash
+npx vitest run --config backend/api/vitest.e2e.config.ts backend/api/test/seaweedfs.e2e-spec.ts
+```
+
+When Docker is unavailable, a separately started, disposable SeaweedFS 4.48 with test credentials `seaweedfs-test-user` / `seaweedfs-test-password` can be used by setting `SEAWEED_TEST_ENDPOINT`. The test creates and deletes its own temporary bucket. This validates S3 compatibility; it does not replace PostgreSQL/API/browser e2e or the container persistence check. Never point it at a production bucket.

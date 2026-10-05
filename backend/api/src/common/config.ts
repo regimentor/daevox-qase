@@ -19,6 +19,10 @@ const environmentSchema = z.object({
   REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).default(2_592_000),
   CORS_ORIGINS: z.string().min(1),
   S3_ENDPOINT: z.string().url(),
+  S3_PUBLIC_ENDPOINT: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().url().optional(),
+  ),
   S3_REGION: z.string().min(1),
   S3_BUCKET: z.string().min(3),
   S3_ACCESS_KEY_ID: z.string().min(1),
@@ -39,6 +43,7 @@ export type AppConfig = {
   corsOrigins: string[];
   s3: {
     endpoint: string;
+    publicEndpoint?: string;
     region: string;
     bucket: string;
     accessKeyId: string;
@@ -67,6 +72,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     corsOrigins: value.CORS_ORIGINS.split(',').map((origin) => origin.trim()),
     s3: {
       endpoint: value.S3_ENDPOINT,
+      publicEndpoint: value.S3_PUBLIC_ENDPOINT,
       region: value.S3_REGION,
       bucket: value.S3_BUCKET,
       accessKeyId: value.S3_ACCESS_KEY_ID,
