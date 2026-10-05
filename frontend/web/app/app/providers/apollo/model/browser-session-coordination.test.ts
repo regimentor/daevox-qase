@@ -202,7 +202,7 @@ describe('browser session coordination', () => {
     const coordination = createBrowserSessionCoordination({
       storage,
       createChannel: undefined,
-      locks: undefined,
+      locks: null,
       eventTarget: undefined,
       now: () => 1_000,
       delay: async () => undefined,

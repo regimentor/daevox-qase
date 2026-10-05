@@ -92,6 +92,8 @@ Start with the smallest check for the changed area:
 - Frontend or operations: codegen, codegen check, frontend typecheck, frontend tests, and lint.
 - Cross-package changes: run the full gate from `AGENTS.md`.
 
+`npm test` uses the root Vitest projects: API unit tests run in Node, and frontend unit/component tests use the web configuration with jsdom, setup files, and the `@` alias. Playwright browser tests and API e2e/integration tests are excluded from this unit-test command. `npm run test:web` runs the same web project independently.
+
 The e2e suite uses disposable PostgreSQL and SeaweedFS Testcontainers. Coverage combines unit, Storybook browser, and Playwright execution; it is expected to be slower and more infrastructure-sensitive than focused checks.
 
 ## Change safety

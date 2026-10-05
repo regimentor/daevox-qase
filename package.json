@@ -23,7 +23,7 @@
     "lint": "oxlint --deny-warnings backend frontend && npm run lint:boundaries -w @app/web",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "test": "vitest run --exclude '**/dist/**' --exclude '**/*.e2e-spec.ts' --exclude '**/*.integration-spec.ts'",
+    "test": "vitest run",
     "test:coverage": "vitest run --config vitest.coverage.config.mts --coverage",
     "test:e2e": "vitest run --config backend/api/vitest.e2e.config.ts",
     "db:generate": "npm run db:generate -w @app/storage",
