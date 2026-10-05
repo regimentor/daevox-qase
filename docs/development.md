@@ -24,6 +24,14 @@ npm run db:seed
 
 Set `SEED_DEMO_PASSWORD` to a password of at least 12 characters before seeding. The seed is intended for local/demo use; production seeding also requires `ALLOW_PRODUCTION_SEED=true`.
 
+The root `package.json` records version-pinned dependency install-script approvals in `allowScripts`. npm versions that enforce this policy skip unapproved dependency scripts. After updating dependencies, run `npm install-scripts ls`, review the listed scripts, and approve the required packages with `npm install-scripts approve <pkg>`. Commit the updated approvals. To run scripts skipped during an earlier installation, run `npm rebuild` after approving them, or reinstall with `npm ci`.
+
+## Dependency security
+
+Run `npm audit` from the repository root. The root overrides pin Prisma's `mysql2` dependency to `3.24.5` and `@prisma/config`'s `deepmerge-ts` dependency to `8.0.2` to address security advisories while retaining Prisma `7.9.1`. Verify Prisma generation and the application checks when changing these overrides; remove them once upstream dependencies use fixed versions.
+
+As of 2026-10-05, the audit still reports ten high-severity entries stemming from `braces` and its GraphQL codegen dependency chain. [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) has no patched release. These entries remain unresolved; the audit's suggested downgrade of GraphQL codegen is not applied. The API/storage contract, database schema, and public GraphQL contract are unchanged by these dependency updates.
+
 The development placeholders in `.env.example` are for local infrastructure. Never commit a real `.env`, credential, access key, password, or JWT key. For production-style keys, generate an Ed25519 pair and store the required PEM or base64-encoded values in the environment.
 
 Start the API:
