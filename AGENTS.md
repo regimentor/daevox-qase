@@ -1,5 +1,9 @@
 # Agent instructions
 
+## File search or grep
+
+For any file search or grep in the current git-indexed directory, use fff tools.
+
 ## Repository shape
 
 This repository is an npm workspace monorepo for the Daevox QA Suite MVP:

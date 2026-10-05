@@ -30,4 +30,6 @@ frontend/web  ── GraphQL operations/types ──>  backend/api  ── Prism
 - API-generated resolver interfaces and frontend GraphQL types are derived artifacts.
 - `@app/api` consumes `@app/storage`; the web client consumes the API through GraphQL.
 - Authentication and tenant authorization are server responsibilities; frontend route protection is not a substitute for API authorization.
-- S3 and MinIO implementations satisfy the API's `ObjectStorage` contract; attachment bytes do not pass through GraphQL.
+- S3 and SeaweedFS implementations satisfy the API's `ObjectStorage` contract; attachment bytes do not pass through GraphQL.
+
+- SeaweedFS 4.48 serves the existing S3 `ObjectStorage` contract. The API uses the internal endpoint for metadata/deletion/readiness and the optional public endpoint for browser signatures. Production nginx preserves signed Host, URI and query on a dedicated S3 listener. PostgreSQL and GraphQL contracts are unchanged.

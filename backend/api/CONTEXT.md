@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-`@app/api` is the NestJS GraphQL API. It exposes the public schema, authenticates requests, enforces authorization, coordinates domain services, and integrates with PostgreSQL through `@app/storage` and with S3/MinIO through the `ObjectStorage` contract.
+`@app/api` is the NestJS GraphQL API. It exposes the public schema, authenticates requests, enforces authorization, coordinates domain services, and integrates with PostgreSQL through `@app/storage` and with S3/SeaweedFS through the `ObjectStorage` contract.
 
 ## Structure
 
@@ -19,6 +19,7 @@
 - Keep persistence details behind services and the storage package. Resolvers coordinate transport concerns; they should not become a second persistence layer.
 - Every resource operation must enforce the authenticated user's workspace membership and project scope. Cross-tenant IDs return the same not-found behavior as absent resources.
 - Preserve ADMIN/MEMBER authorization rules, last-admin protection, and request/token/password/storage-key log redaction.
+- `S3_ENDPOINT` addresses internal S3 operations; optional `S3_PUBLIC_ENDPOINT` addresses browser presigned PUT/GET links and defaults to the internal endpoint. SeaweedFS 4.48 requires `WHEN_REQUIRED` checksum calculation for browser PUT signatures.
 - Keep attachment bytes in object storage. GraphQL returns metadata and presigned operations, while failed deletion is represented by the durable `object_deletions` outbox path.
 
 ## Important invariants
@@ -38,4 +39,4 @@ After changing the SDL, run the API generator through `npm run build`, `npm run 
 
 ## Verification
 
-For focused API changes, run `npm run typecheck`, relevant tests, and `npm run lint`. For persistence, transaction, authorization, or cross-package changes, include the relevant e2e tests. Use `npm run test:e2e` for behavior that depends on real PostgreSQL, MinIO, migrations, or the complete GraphQL boundary.
+For focused API changes, run `npm run typecheck`, relevant tests, and `npm run lint`. For persistence, transaction, authorization, or cross-package changes, include the relevant e2e tests. Use `npm run test:e2e` for behavior that depends on real PostgreSQL, SeaweedFS, migrations, or the complete GraphQL boundary.
