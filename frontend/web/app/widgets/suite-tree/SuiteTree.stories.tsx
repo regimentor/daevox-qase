@@ -67,7 +67,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
-export const SingleLineNodes: Story = {
+export const WrappedNodes: Story = {
   render: (args) => (
     <MockedProvider
       mocks={[
@@ -88,6 +88,8 @@ export const SingleLineNodes: Story = {
                   parentId: null,
                   title: longSuiteTitle,
                   description: null,
+                  preconditions: null,
+                  postconditions: null,
                   position: 0,
                   createdAt: '2026-08-20T00:00:00Z',
                   updatedAt: '2026-08-20T00:00:00Z',
@@ -112,7 +114,8 @@ export const SingleLineNodes: Story = {
     const tree = suiteTitle.closest('.ant-tree');
     expect(suiteNode).not.toBeNull();
     expect(tree).not.toBeNull();
-    expect(suiteNode!.getBoundingClientRect().height).toBeLessThanOrEqual(32);
+    expect(suiteNode!.getBoundingClientRect().height).toBeGreaterThan(32);
+    expect(suiteTitle.scrollWidth).toBeLessThanOrEqual(suiteTitle.clientWidth);
     expect(tree!.scrollWidth).toBeLessThanOrEqual(tree!.clientWidth);
   },
 };

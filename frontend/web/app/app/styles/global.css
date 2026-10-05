@@ -151,8 +151,7 @@ select {
   background: #f5f7fa;
 }
 .repository-layout {
-  display: grid;
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  display: flex;
   gap: 10px;
   align-items: start;
 }
@@ -167,11 +166,14 @@ select {
   font-size: 22px;
 }
 .suite-panel {
+  flex: none;
+  width: 280px;
+  min-width: 240px;
   min-height: 0;
   padding: 8px 6px;
   resize: horizontal;
   overflow: auto;
-  max-width: 420px;
+  max-width: calc(100% - 330px);
 }
 .suite-tree-heading {
   display: flex;
@@ -182,8 +184,31 @@ select {
 .suite-tree .ant-tree-title {
   min-width: 0;
 }
+.suite-tree .ant-tree-node-content-wrapper {
+  flex: 1;
+}
+.suite-tree-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .repository-main {
+  flex: 1;
   min-width: 0;
+}
+.suite-metadata-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+.suite-metadata-fields .ant-form-item {
+  flex: 1 1 280px;
+  min-width: 0;
+  max-width: 100%;
+}
+.suite-metadata-editor .ant-card-head-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .repository-toolbar {
   display: flex;
@@ -324,12 +349,18 @@ select {
 }
 @media (max-width: 1023px) {
   .repository-layout {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
   .suite-panel {
+    /* Native resize sets an inline width; reset it in the stacked layout. */
+    width: 100% !important;
+    min-width: 0;
     min-height: auto;
     max-width: none;
     resize: none;
+  }
+  .repository-main {
+    width: 100%;
   }
 }
 @media (max-width: 1023px) {

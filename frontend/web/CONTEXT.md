@@ -30,6 +30,7 @@ Stories are application-level compositions for boundary checking even when coloc
 - The repository supports an archive mode for suites and cases. Active views hide archived objects by default; archive actions show an API impact preview, and restore actions do not assume that old plan/source links are restored.
 - Plan editing supports multiple source suites and manual case provenance. The source-suite selector uses the active suite tree, while active and archived case counts are shown separately on plan list/detail views. Saving source changes also persists the displayed case order and reports synchronization counts from the API.
 - Suite authoring supports nullable plain-text preconditions and postconditions. Repository editing shows the selected Suite's own metadata, while run execution renders the immutable ordered Suite metadata snapshot separately from the Test Case pre/postconditions.
+- On desktop, the repository suite panel can be resized horizontally; its width is constrained to leave at least 320 px for the right pane. The table scrolls horizontally within that pane, and suite titles wrap. At viewport widths of 1023 px or less, the panes stack and resizing is disabled.
 - Keep attachment upload/download flows aligned with the API's presigned object-storage contract; file bytes should not be routed through GraphQL.
 
 ## Data and routing

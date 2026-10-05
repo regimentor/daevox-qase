@@ -63,7 +63,7 @@ function toNodes(
           }}
         >
           <FolderOutlined aria-hidden />
-          <Typography.Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+          <Typography.Text className="suite-tree-title" style={{ flex: 1, minWidth: 0 }}>
             {suite.title} {suite.archivedAt && <Tag>Архив</Tag>}
           </Typography.Text>
           <Dropdown
