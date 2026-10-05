@@ -5,6 +5,7 @@ import { ExecutionWorkspace } from '@/widgets/execution-workspace';
 import { TestRunDocument, TestRunStatus } from '@/shared/api/graphql';
 import { ErrorState, PageSkeleton } from '@/shared/ui';
 import { routes } from '@/shared/routes';
+import { runCasesInTreeOrder } from '@/shared/lib/run-navigation';
 export function RunExecutionPage({ runId, runCaseId }: { runId: string; runCaseId?: string }) {
   const { workspace, project } = useProjectContext();
   const navigate = useNavigate();
@@ -23,7 +24,8 @@ export function RunExecutionPage({ runId, runCaseId }: { runId: string; runCaseI
     );
   const run = query.data?.testRun;
   if (!run) return null;
-  const first = run.cases.find((item) => item.currentStatus === 'UNTESTED') ?? run.cases[0];
+  const orderedCases = runCasesInTreeOrder(run.cases);
+  const first = orderedCases.find((item) => item.currentStatus === 'UNTESTED') ?? orderedCases[0];
   if (!runCaseId && first)
     return <Navigate to={routes.execute(workspace.id, project.id, runId, first.id)} replace />;
   if (!runCaseId || !run.cases.some((item) => item.id === runCaseId))

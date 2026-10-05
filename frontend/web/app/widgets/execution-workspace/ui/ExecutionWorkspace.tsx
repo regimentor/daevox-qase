@@ -15,7 +15,7 @@ import {
   Space,
   Typography,
 } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { AttachmentUploader } from '@/features/attachment-upload';
 import { ResultSubmitPanel } from '@/features/result-submit';
 import {
@@ -25,6 +25,11 @@ import {
 } from '@/shared/api/graphql';
 import { PriorityTag, SeverityTag, StatusTag } from '@/shared/ui';
 import { clampPercentage } from '@/shared/lib/number';
+import {
+  runSuiteTree,
+  runCasesInTreeOrder,
+  type RunNavigationNode,
+} from '@/shared/lib/run-navigation';
 
 interface StepDraft {
   status?: TestResultStatus;
@@ -49,11 +54,24 @@ export function ExecutionWorkspace({
   onSelect(id: string): void;
   onExit(): void;
 }) {
-  const current = cases.find((item) => item.id === currentId) ?? cases[0];
+  const orderedCases = useMemo(() => runCasesInTreeOrder(cases), [cases]);
+  const current = orderedCases.find((item) => item.id === currentId) ?? orderedCases[0];
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>();
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const treeId = useId();
   const [steps, setSteps] = useState<Record<string, StepDraft>>({});
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (search || status) setCollapsed(new Set());
+  }, [search, status]);
+  useEffect(() => {
+    if (!current) return;
+    const ancestors = current.suiteMetadata.length
+      ? current.suiteMetadata.map((suite) => suite.suiteId)
+      : ['ungrouped'];
+    setCollapsed((value) => new Set([...value].filter((id) => !ancestors.includes(id))));
+  }, [current]);
   useEffect(() => {
     if (!current) return;
     try {
@@ -68,18 +86,65 @@ export function ExecutionWorkspace({
     }
     setAttachmentIds([]);
   }, [current?.id]);
-  const filtered = useMemo(
-    () =>
-      cases.filter(
-        (item) =>
-          (!status || item.currentStatus === status) &&
-          (!search ||
-            `${item.displayId} ${item.title}`.toLowerCase().includes(search.toLowerCase())),
-      ),
-    [cases, search, status],
-  );
+  const tree = useMemo(() => {
+    const filter = (nodes: RunNavigationNode[]): RunNavigationNode[] =>
+      nodes.flatMap<RunNavigationNode>((node) => {
+        if (node.kind === 'case') {
+          const item = node.item;
+          return (!status || item.currentStatus === status) &&
+            (!search ||
+              `${item.displayId} ${item.title}`.toLowerCase().includes(search.toLowerCase()))
+            ? [node]
+            : [];
+        }
+        const children = filter(node.children);
+        return children.length ? [{ ...node, children }] : [];
+      });
+    return filter(runSuiteTree(cases));
+  }, [cases, search, status]);
+  const renderNodes = (nodes: RunNavigationNode[]) =>
+    nodes.map((node) => (
+      <li key={node.id}>
+        {node.kind === 'suite' ? (
+          <>
+            <button
+              type="button"
+              className="navigator-suite"
+              aria-expanded={!collapsed.has(node.id)}
+              aria-controls={`${treeId}-${node.id}`}
+              onClick={() =>
+                setCollapsed((value) => {
+                  const next = new Set(value);
+                  if (next.has(node.id)) next.delete(node.id);
+                  else next.add(node.id);
+                  return next;
+                })
+              }
+            >
+              {node.title}
+            </button>
+            <ul id={`${treeId}-${node.id}`} aria-label={node.title} hidden={collapsed.has(node.id)}>
+              {renderNodes(node.children)}
+            </ul>
+          </>
+        ) : (
+          <button
+            type="button"
+            className={`navigator-item ${node.id === currentId ? 'active' : ''}`}
+            aria-current={node.id === currentId ? 'true' : undefined}
+            onClick={() => onSelect(node.id)}
+          >
+            <StatusTag status={node.item.currentStatus} />
+            <span>
+              <strong className="mono-id">{node.item.displayId}</strong>
+              <small>{node.item.title}</small>
+            </span>
+          </button>
+        )}
+      </li>
+    ));
   if (!current) return <Card>В запуске нет кейсов.</Card>;
-  const index = cases.findIndex((item) => item.id === current.id);
+  const index = orderedCases.findIndex((item) => item.id === current.id);
   const executed = cases.filter((item) => item.currentStatus !== 'UNTESTED').length;
   const patchStep = (id: string, patch: StepDraft) => {
     setSteps((value) => {
@@ -100,8 +165,9 @@ export function ExecutionWorkspace({
       : [],
   );
   const nextUntested =
-    cases.find((item, itemIndex) => itemIndex > index && item.currentStatus === 'UNTESTED') ??
-    cases.find((item) => item.currentStatus === 'UNTESTED');
+    orderedCases.find(
+      (item, itemIndex) => itemIndex > index && item.currentStatus === 'UNTESTED',
+    ) ?? orderedCases.find((item) => item.currentStatus === 'UNTESTED');
   return (
     <div className="execution-shell">
       <header className="execution-header">
@@ -133,6 +199,7 @@ export function ExecutionWorkspace({
           />
           <Select
             aria-label="Фильтр кейсов запуска по статусу"
+            virtual={false}
             allowClear
             placeholder="Статус"
             value={status}
@@ -143,33 +210,24 @@ export function ExecutionWorkspace({
             }))}
           />
           <div className="navigator-list">
-            {filtered.map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                className={`navigator-item ${item.id === current.id ? 'active' : ''}`}
-                onClick={() => onSelect(item.id)}
-              >
-                <StatusTag status={item.currentStatus} />
-                <span>
-                  <strong className="mono-id">{item.displayId}</strong>
-                  <small>{item.title}</small>
-                </span>
-              </button>
-            ))}
+            {tree.length ? (
+              <ul aria-label="Сьюты запуска">{renderNodes(tree)}</ul>
+            ) : (
+              <Typography.Text type="secondary">Кейсы не найдены</Typography.Text>
+            )}
           </div>
           <Space>
             <Button
               icon={<ArrowLeftOutlined />}
               disabled={index <= 0}
-              onClick={() => onSelect(cases[index - 1]!.id)}
+              onClick={() => onSelect(orderedCases[index - 1]!.id)}
             >
               Назад
             </Button>
             <Button
               icon={<ArrowRightOutlined />}
               disabled={index >= cases.length - 1}
-              onClick={() => onSelect(cases[index + 1]!.id)}
+              onClick={() => onSelect(orderedCases[index + 1]!.id)}
             >
               Далее
             </Button>
