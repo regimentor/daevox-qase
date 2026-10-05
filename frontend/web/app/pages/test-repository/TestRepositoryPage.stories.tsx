@@ -35,6 +35,7 @@ const suite = {
   description: null,
   preconditions: 'Пользователь активен',
   postconditions: 'Сессия закрыта',
+  archivedAt: null,
   position: 0,
   createdAt: now,
   updatedAt: now,
@@ -260,5 +261,96 @@ export const ErrorAndRetry: Story = {
     const canvas = within(canvasElement);
     expect(await canvas.findByText('Не удалось загрузить данные')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Повторить' }));
+  },
+};
+
+const longSuiteTitle = 'ПроверкаАвторизацииПользователя'.repeat(4);
+
+export const ResizableSuitePanel: Story = {
+  parameters: {
+    msw: [
+      graphql.query('SuiteTree', () =>
+        HttpResponse.json({
+          data: {
+            suiteTree: [
+              {
+                ...suite,
+                children: [
+                  { ...suite, id: 'suite-long', parentId: suite.id, title: longSuiteTitle },
+                ],
+              },
+            ],
+          },
+        }),
+      ),
+      ...handlers,
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText('WEB-1');
+    await userEvent.click(await canvas.findByText(suite.title));
+    await canvas.findByRole('textbox', { name: 'Предусловия' });
+    const suiteNode = canvas.getByText(suite.title).closest('.ant-tree-treenode');
+    const switcher = suiteNode?.querySelector<HTMLElement>('.ant-tree-switcher');
+    if (!switcher) throw new Error('Suite expander unavailable');
+    await userEvent.click(switcher);
+    const title = await canvas.findByText(longSuiteTitle);
+    const panel = canvasElement.querySelector<HTMLElement>('.suite-panel');
+    const main = canvasElement.querySelector<HTMLElement>('.repository-main');
+    const layout = canvasElement.querySelector<HTMLElement>('.repository-layout');
+    const scroller = canvasElement.querySelector<HTMLElement>('.ant-table-content');
+    if (!panel || !main || !layout || !scroller) throw new Error('Repository layout unavailable');
+
+    const assertContained = () => {
+      expect(canvasElement.ownerDocument.documentElement.scrollWidth).toBeLessThanOrEqual(
+        window.innerWidth,
+      );
+      expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
+      expect(title.scrollWidth).toBeLessThanOrEqual(title.clientWidth + 1);
+      expect(main.scrollWidth).toBeLessThanOrEqual(main.clientWidth + 1);
+    };
+    if (window.innerWidth <= 1023) {
+      // A width written during desktop resizing must not overflow the stacked layout.
+      panel.style.width = '2000px';
+      expect(getComputedStyle(panel).resize).toBe('none');
+      expect(main.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+        panel.getBoundingClientRect().bottom,
+      );
+      assertContained();
+      panel.style.removeProperty('width');
+      return;
+    }
+
+    const initialWidth = main.getBoundingClientRect().width;
+    const previousLayoutWidth = layout.style.width;
+    try {
+      expect(panel.getBoundingClientRect().width).toBe(280);
+      expect(getComputedStyle(panel).resize).toBe('horizontal');
+      // Native resizing writes an inline width; exercise the same constraint path.
+      panel.style.width = '460px';
+      await waitFor(() => expect(main.getBoundingClientRect().width).toBeLessThan(initialWidth));
+      expect(panel.getBoundingClientRect().right).toBeLessThan(main.getBoundingClientRect().left);
+      assertContained();
+
+      panel.style.width = '2000px';
+      expect(main.getBoundingClientRect().width).toBeGreaterThanOrEqual(320);
+      layout.style.width = '650px';
+      expect(panel.getBoundingClientRect().width).toBe(320);
+      expect(main.getBoundingClientRect().width).toBe(320);
+      assertContained();
+      expect(scroller.scrollWidth).toBeGreaterThan(scroller.clientWidth);
+      scroller.scrollLeft = 100;
+      expect(scroller.scrollLeft).toBeGreaterThan(0);
+
+      panel.style.width = '240px';
+      expect(panel.getBoundingClientRect().width).toBe(240);
+      expect(main.getBoundingClientRect().width).toBe(400);
+      assertContained();
+    } finally {
+      panel.style.removeProperty('width');
+      layout.style.width = previousLayoutWidth;
+      scroller.scrollLeft = 0;
+    }
   },
 };

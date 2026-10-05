@@ -175,7 +175,7 @@ export function TestRepositoryPage() {
         title="Test Repository"
         description={`${project.code} · источник тест-кейсов`}
         extra={
-          <Space>
+          <Space wrap>
             <Button
               size="small"
               icon={<RocketOutlined />}
@@ -304,17 +304,17 @@ export function TestRepositoryPage() {
                 onFinish={(values) => void saveSuiteMetadata(values)}
                 disabled={readOnly || updateSuiteState.loading}
               >
-                <Space align="start" style={{ display: 'flex' }} wrap>
-                  <Form.Item label="Предусловия" name="preconditions" style={{ minWidth: 280 }}>
+                <div className="suite-metadata-fields">
+                  <Form.Item label="Предусловия" name="preconditions">
                     <Input.TextArea rows={3} placeholder="Общие условия перед кейсами suite" />
                   </Form.Item>
-                  <Form.Item label="Постусловия" name="postconditions" style={{ minWidth: 280 }}>
+                  <Form.Item label="Постусловия" name="postconditions">
                     <Input.TextArea rows={3} placeholder="Общие условия после кейсов suite" />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" loading={updateSuiteState.loading}>
                     Сохранить
                   </Button>
-                </Space>
+                </div>
               </Form>
             </Card>
           )}
