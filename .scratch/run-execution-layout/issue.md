@@ -75,6 +75,8 @@ Owner: Codex
 
 Браузерные команды использовали существующие локальные `PLAYWRIGHT_BROWSERS_PATH=/tmp/daevox-playwright` и `LD_LIBRARY_PATH=/tmp/daevox-browser-libs/root/usr/lib/x86_64-linux-gnu`. Chromium/локальные серверы, build и Docker-проверки запускались вне sandbox; секреты и инфраструктурные данные не добавлялись в репозиторий.
 
+2026-10-06: по уточнению пользователя текстовые названия статусов в статистике сьютов заменены иконками с числами. Названия сохранены в `title` и `aria-label`; иконки декоративные для скринридера. Изменение прошло red → green через существующий публичный UI-тест. Повторно успешно выполнены `npm run codegen`, `npm run codegen:check`, `npm run typecheck:web`, `npm run test:web` (83 теста), `npm run lint`, 8 Storybook/Chromium-сценариев на 1600 px, форматирование изменённых файлов и `git diff --check`.
+
 ## Blockers
 
 Блокеров реализации нет. Полный verification gate остаётся незелёным из-за указанных ошибок форматирования локальных skills и backend coverage-сценариев; проверки frontend-задачи выполнены успешно.

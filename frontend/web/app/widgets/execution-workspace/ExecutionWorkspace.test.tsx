@@ -168,6 +168,8 @@ it('shows subtree totals and status counts for collapsed suites, including ungro
   expect(summary.getByText('Кейсов: 2')).toBeVisible();
   expect(summary.getByLabelText('Не выполнен: 1')).toBeVisible();
   expect(summary.getByLabelText('Пройден: 1')).toBeVisible();
+  expect(summary.getByLabelText('Пройден: 1')).toHaveTextContent(/^1$/);
+  expect(summary.getByLabelText('Пройден: 1')).toHaveAttribute('title', 'Пройден: 1');
   expect(summary.getByLabelText('Провален: 0')).toBeVisible();
   expect(summary.getByLabelText('Заблокирован: 0')).toBeVisible();
   expect(summary.getByLabelText('Пропущен: 0')).toBeVisible();

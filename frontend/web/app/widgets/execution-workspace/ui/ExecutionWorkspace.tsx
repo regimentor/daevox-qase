@@ -1,7 +1,12 @@
 import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
   CloseOutlined,
+  MinusCircleOutlined,
+  PauseCircleOutlined,
+  RightCircleOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
 import {
@@ -38,6 +43,13 @@ interface StepDraft {
 }
 const caseStatuses = ['UNTESTED', 'PASSED', 'FAILED', 'BLOCKED', 'SKIPPED'] as const;
 const statusColors = ['default', 'success', 'error', 'warning', 'processing'] as const;
+const statusIcons = [
+  <MinusCircleOutlined aria-hidden key="untested" />,
+  <CheckCircleOutlined aria-hidden key="passed" />,
+  <CloseCircleOutlined aria-hidden key="failed" />,
+  <PauseCircleOutlined aria-hidden key="blocked" />,
+  <RightCircleOutlined aria-hidden key="skipped" />,
+];
 export function ExecutionWorkspace({
   workspaceId,
   runId,
@@ -191,8 +203,14 @@ export function ExecutionWorkspace({
               {caseStatuses.map((value, index) => {
                 const label = `${getStatusLabel(value)}: ${suiteStats.get(node.id)!.counts[index]}`;
                 return (
-                  <Tag key={value} color={statusColors[index]} aria-label={label}>
-                    {label}
+                  <Tag
+                    key={value}
+                    color={statusColors[index]}
+                    icon={statusIcons[index]}
+                    aria-label={label}
+                    title={label}
+                  >
+                    {suiteStats.get(node.id)!.counts[index]}
                   </Tag>
                 );
               })}
