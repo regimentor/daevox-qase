@@ -285,6 +285,47 @@ select {
   flex: 1;
   overflow: auto;
 }
+.navigator-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.navigator-list ul ul {
+  margin-left: 12px;
+  border-left: 1px solid #e7eaf0;
+  padding-left: 4px;
+}
+.navigator-suite {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.navigator-suite::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+.navigator-suite[aria-expanded='false']::before {
+  transform: rotate(-45deg);
+}
+.navigator-suite:focus-visible,
+.navigator-item:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: -2px;
+}
 .navigator-item {
   width: 100%;
   display: flex;
